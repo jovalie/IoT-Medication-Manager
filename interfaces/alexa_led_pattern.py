@@ -43,21 +43,34 @@ class AlexaLedPattern(object):
         self.show(pixels)
 
     def listen(self):
-        pixels = [0, 0, 0, 0] * self.pixels_number
-
-        # Create a spinning pattern: 3 pixels RED (intuitive for recording), rest off
-        for i in range(3):
-            pixels[i * 4 + 1] = 24
-
+        # Breathing White (Listening)
+        step = 1
+        brightness = 0
         while not self.stop:
+            # White is Red+Green+Blue
+            # brightness is used for all channels
+            pixels = [0, brightness, brightness, brightness] * self.pixels_number
             self.show(pixels)
-            time.sleep(0.05)
-            pixels = pixels[-4:] + pixels[:-4]
+            time.sleep(0.01)
+
+            if brightness <= 0:
+                step = 1
+                time.sleep(0.05)
+            elif brightness >= 24:
+                step = -1
+                time.sleep(0.05)
+
+            brightness += step
 
     def think(self):
-        # Rotate Blue pixels (Processing)
-        # Pattern: [?, Red=0, Green=0, Blue=24]
-        pixels = [0, 0, 0, 24, 0, 0, 0, 12] * self.pixels_number
+        # Rotating White (Thinking/Processing)
+        # 3 pixels White
+        pixels = [0, 0, 0, 0] * self.pixels_number
+        for i in range(3):
+            # White: R=24, G=24, B=24
+            pixels[i * 4 + 1] = 24
+            pixels[i * 4 + 2] = 24
+            pixels[i * 4 + 3] = 24
 
         while not self.stop:
             self.show(pixels)
