@@ -124,11 +124,12 @@ try:
             "You are a helpful medication manager assistant.",
             "You analyze what the user says and extract the intent.",
             "Return ONLY a JSON object. Do not include markdown formatting.",
-            "Possible intents: 'MEDICATION_LOG', 'NEW_PATIENT', 'UNKNOWN'.",
+            "Possible intents: 'MEDICATION_LOG', 'NEW_PATIENT', 'INTRODUCTION', 'UNKNOWN'.",
             "Structure for MEDICATION_LOG: { 'intent': 'MEDICATION_LOG', 'patient_name': '...', 'status': 'TAKEN'/'MISSED', 'notes': '...' }",
             "Structure for NEW_PATIENT: { 'intent': 'NEW_PATIENT', 'name': '...', 'medicine': '...', 'time': '...' }",
+            "Structure for INTRODUCTION: { 'intent': 'INTRODUCTION' }",
             "Structure for UNKNOWN: { 'intent': 'UNKNOWN', 'response': '...' }",
-            "If the user says 'I took my meds' and doesn't specify a name, infer the patient name based on who has a medication due around the current time. If unsure, return intent: UNKNOWN with response asking for the name."
+            "If the user says 'I took my meds' and doesn't specify a name, infer the patient name based on who has a medication due around the current time. If unsure, return intent: UNKNOWN with response asking for the name.",
         ],
     )
     print(f"* Vertex AI Initialized with model: {GEMINI_MODEL_NAME}")
@@ -270,17 +271,21 @@ def play_audio(audio_file):
 def process_intent(text):
     print(f"* Analyzing Intent with Gemini: '{text}'")
     pixels.think()
-    
+
     # Context Injection: Fetch patient schedules to help Gemini infer the name
     try:
         conn = get_db_connection()
         patients = conn.execute("SELECT name, time_due FROM patients").fetchall()
         conn.close()
-        
-        patient_context = "Current Patient List: " + ", ".join([f"{p['name']} (Due: {p['time_due']})" for p in patients])
+
+        patient_context = "Current Patient List: " + ", ".join(
+            [f"{p['name']} (Due: {p['time_due']})" for p in patients]
+        )
         current_time = datetime.now().strftime("%H:%M")
-        full_prompt = f"Current Time: {current_time}. {patient_context}. User says: '{text}'"
-        
+        full_prompt = (
+            f"Current Time: {current_time}. {patient_context}. User says: '{text}'"
+        )
+
     except Exception as e:
         print(f"DB Context Error: {e}")
         full_prompt = text
@@ -338,6 +343,9 @@ def main():
                     response_speech = (
                         "To add a patient, please say their name, medicine, and time."
                     )
+
+            elif intent_data["intent"] == "INTRODUCTION":
+                response_speech = "Hello! I am your Medication Manager. I help you track your daily medicines. You can tell me when you've taken your pills, or add a new patient."
 
             else:
                 response_speech = intent_data.get(
