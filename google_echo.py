@@ -29,8 +29,7 @@ RESPEAKER_INDEX = 2  # Adjust if needed
 CHUNK = 1024
 INPUT_FILENAME = "input_request.wav"
 OUTPUT_FILENAME = "output_response.wav"
-# Using Gemini 2.5 as requested (fallback to 1.5 if 2.5 is not available)
-GEMINI_MODEL_NAME = "gemini-2.5-pro" 
+GEMINI_MODEL_NAME = "gemini-2.5-pro"
 
 # Silence detection settings
 SILENCE_THRESHOLD = 500  # Adjust based on your microphone and environment
