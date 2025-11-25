@@ -20,7 +20,9 @@ def create_tables(conn):
         c.execute("""
             CREATE TABLE IF NOT EXISTS patients (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL
+                name TEXT NOT NULL,
+                medicine TEXT,
+                time_due TEXT
             )
         """)
         
@@ -53,8 +55,12 @@ def seed_data(conn):
         return
 
     # Insert Patients
-    patients = [("Grandpa Joe",), ("Grandma Sarah",), ("Uncle Bob",)]
-    c.executemany("INSERT INTO patients (name) VALUES (?)", patients)
+    patients = [
+        ("Grandpa Joe", "Aspirin", "09:00"), 
+        ("Grandma Sarah", "Vitamin C", "10:00"), 
+        ("Uncle Bob", "Lipitor", "20:00")
+    ]
+    c.executemany("INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients)
     
     # Get IDs
     c.execute("SELECT id, name FROM patients")
