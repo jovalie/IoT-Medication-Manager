@@ -38,9 +38,16 @@ class AlexaLedPattern(object):
         self.show(pixels)
 
     def listen(self):
-        pixels = [0, 0, 0, 24] * self.pixels_number
+        pixels = [0, 0, 0, 0] * self.pixels_number
+        
+        # Create a spinning pattern: 3 pixels blue, rest off
+        for i in range(3):
+            pixels[i*4 + 3] = 24
 
-        self.show(pixels)
+        while not self.stop:
+            self.show(pixels)
+            time.sleep(0.05)
+            pixels = pixels[-4:] + pixels[:-4]
 
     def think(self):
         pixels  = [0, 0, 12, 12, 0, 0, 0, 24] * self.pixels_number
