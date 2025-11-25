@@ -185,6 +185,12 @@ def main():
             if success:
                 # 4. Playback
                 play_audio(OUTPUT_FILENAME)
+        else:
+            # No speech detected
+            print("No speech detected, playing apology...")
+            success = text_to_speech("I'm sorry, I didn't hear what you said.")
+            if success:
+                play_audio(OUTPUT_FILENAME)
                 
     except KeyboardInterrupt:
         print("\nExiting...")
@@ -195,4 +201,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
