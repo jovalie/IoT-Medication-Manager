@@ -7,14 +7,16 @@ from vertexai.generative_models import GenerativeModel
 # Configuration
 CREDENTIALS_FILE = "google_credentials.json"
 
-# List of models to try in order
+# List of models based on latest documentation
 MODELS_TO_TRY = [
-    "gemini-1.5-flash-001",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro-001",
+    "gemini-2.5-pro",          # Stable
+    "gemini-2.5-flash",        # Stable
+    "gemini-2.0-flash",        # Latest
+    "gemini-2.0-flash-lite",   # Latest
+    "gemini-1.5-pro-002",
+    "gemini-1.5-flash-002",
     "gemini-1.5-pro",
-    "gemini-1.0-pro",
-    "gemini-pro"
+    "gemini-1.5-flash"
 ]
 
 def test_gemini():
@@ -39,6 +41,7 @@ def test_gemini():
         print(f"FAIL: Initialization error: {e}")
         return False
 
+    success = False
     for model_name in MODELS_TO_TRY:
         print(f"\nTrying model: {model_name}...")
         try:
@@ -46,12 +49,16 @@ def test_gemini():
             response = model.generate_content("Say 'Hello' if you hear me.")
             print(f"SUCCESS with {model_name}!")
             print(f"Response: {response.text}")
-            return True
+            success = True
+            break # Stop after first success
         except Exception as e:
             print(f"Failed with {model_name}: {e}")
     
-    print("\nFAIL: All models failed.")
-    return False
+    if not success:
+        print("\nFAIL: All models failed.")
+        return False
+    
+    return True
 
 if __name__ == "__main__":
     success = test_gemini()
