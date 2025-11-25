@@ -206,20 +206,34 @@ def play_audio(audio_file):
         wf.close()
 
 
+def ask_gemini(text):
+    print(f"* Asking Gemini: '{text}'")
+    pixels.think()
+    try:
+        response = model.generate_content(text)
+        print(f"Gemini response: {response.text}")
+        return response.text
+    except Exception as e:
+        print(f"Gemini Error: {e}")
+        return "I'm sorry, I'm having trouble thinking right now."
+
 def main():
     try:
         # 1. Record
         audio_file = record_audio()
-
+        
         # 2. Transcribe
         text = speech_to_text(audio_file)
-
+        
         if text:
-            # 3. Synthesize
-            success = text_to_speech(text)
+            # 3. Ask Gemini
+            response_text = ask_gemini(text)
 
+            # 4. Synthesize Response
+            success = text_to_speech(response_text)
+            
             if success:
-                # 4. Playback
+                # 5. Playback
                 play_audio(OUTPUT_FILENAME)
         else:
             # No speech detected

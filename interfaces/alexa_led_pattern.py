@@ -43,7 +43,7 @@ class AlexaLedPattern(object):
         self.show(pixels)
 
     def listen(self):
-        # Breathing White (Listening)
+        # Breathing White (Listening) - Slower
         step = 1
         brightness = 0
         while not self.stop:
@@ -51,14 +51,14 @@ class AlexaLedPattern(object):
             # brightness is used for all channels
             pixels = [0, brightness, brightness, brightness] * self.pixels_number
             self.show(pixels)
-            time.sleep(0.01)
+            time.sleep(0.04)  # Slower fade (was 0.01)
 
             if brightness <= 0:
                 step = 1
-                time.sleep(0.05)
+                time.sleep(0.2)  # Hold at dark (was 0.05)
             elif brightness >= 24:
                 step = -1
-                time.sleep(0.05)
+                time.sleep(0.2)  # Hold at bright (was 0.05)
 
             brightness += step
 
