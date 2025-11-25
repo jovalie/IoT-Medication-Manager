@@ -7,7 +7,6 @@ import audioop
 import json
 import sqlite3
 from datetime import datetime
-
 import random
 
 # Add interfaces path
@@ -71,7 +70,6 @@ def log_medication(patient_name, status, notes=None):
         c = conn.cursor()
 
         # Find patient ID (simple lookup by name for now)
-        # In a real scenario, might need clarification if duplicates exist
         c.execute("SELECT id FROM patients WHERE name LIKE ?", (f"%{patient_name}%",))
         patient = c.fetchone()
 
@@ -126,13 +124,14 @@ try:
             "You are a helpful medication manager assistant.",
             "You analyze what the user says and extract the intent.",
             "Return ONLY a JSON object. Do not include markdown formatting.",
-            "Possible intents: 'MEDICATION_LOG', 'NEW_PATIENT', 'INTRODUCTION', 'UNKNOWN'.",
+            "Possible intents: 'MEDICATION_LOG', 'NEW_PATIENT', 'INTRODUCTION', 'DELAY', 'UNKNOWN'.",
             "Structure for MEDICATION_LOG: { 'intent': 'MEDICATION_LOG', 'patient_name': '...', 'status': 'TAKEN'/'MISSED', 'notes': '...' }",
             "Structure for NEW_PATIENT: { 'intent': 'NEW_PATIENT', 'name': '...', 'medicine': '...', 'time': '...' }",
             "Structure for INTRODUCTION: { 'intent': 'INTRODUCTION' }",
+            "Structure for DELAY: { 'intent': 'DELAY', 'duration': '...' }",
             "Structure for UNKNOWN: { 'intent': 'UNKNOWN', 'response': '...' }",
-            "If the user asks who you are (INTRODUCTION), output intent 'INTRODUCTION'. Do NOT generate the response text in JSON, the system will handle it.",
-            "If the user says 'I took my meds' and doesn't specify a name, infer the patient name based on who has a medication due around the current time. If unsure, return intent: UNKNOWN with response asking for the name.",
+            "If the user says 'I will take it later' or 'Give me 5 minutes', return intent: DELAY.",
+            "If the user says 'I took my meds' and doesn't specify a name, infer the patient name based on who has a medication due around the current time. If unsure, return intent: UNKNOWN with response asking for the name."
         ],
     )
     print(f"* Vertex AI Initialized with model: {GEMINI_MODEL_NAME}")
@@ -307,75 +306,108 @@ def process_intent(text):
         }
 
 
+def run_reminder_flow(patient_name="Grandpa Joe"):
+    print(f"\n--- Starting Reminder Flow for {patient_name} ---")
+    
+    reminders_count = 0
+    max_reminders = 4
+    
+    # 1. Play Reminder 1
+    text_to_speech(f"Hello {patient_name}. Please take your medicine.")
+    play_audio(OUTPUT_FILENAME)
+    
+    while reminders_count < max_reminders:
+        print(f"\n[Reminder Loop: {reminders_count + 1}/{max_reminders}]")
+        
+        # Listen for response
+        audio_file = record_audio()
+        text = speech_to_text(audio_file)
+        
+        if not text:
+            # NO RESPONSE -> Wait 15 mins (simulated 5s) -> Check Pillbox (Voice)
+            print("* No response. Waiting 5 seconds (simulated 15 mins)...")
+            time.sleep(5)
+            
+            # Check pillbox (Simulated by asking again)
+            text_to_speech("I noticed you haven't responded. Did you open your pillbox?")
+            play_audio(OUTPUT_FILENAME)
+            
+            audio_file = record_audio()
+            text = speech_to_text(audio_file)
+            
+            if text and "yes" in text.lower():
+                 text_to_speech("Great. Recording that you took it.")
+                 play_audio(OUTPUT_FILENAME)
+                 log_medication(patient_name, "TAKEN")
+                 return
+            else:
+                 # No -> Send Alert -> End
+                 print("* Sending WhatsApp Alert...")
+                 text_to_speech(f"Alerting caregiver that {patient_name} has not taken medication.")
+                 play_audio(OUTPUT_FILENAME)
+                 log_medication(patient_name, "MISSED")
+                 return
+
+        # Analyze Intent
+        intent_data = process_intent(text)
+        
+        if intent_data['intent'] == 'MEDICATION_LOG' and intent_data.get('status') == 'TAKEN':
+            # "Already took it" -> End
+            log_medication(patient_name, "TAKEN")
+            text_to_speech("Thank you. Have a nice day.")
+            play_audio(OUTPUT_FILENAME)
+            return
+            
+        elif intent_data['intent'] == 'DELAY':
+            # "I will take it in 5 mins" -> Wait 5 mins (simulated 5s) -> Check Pillbox
+            print("* User requested delay. Waiting 5 seconds (simulated 5 mins)...")
+            text_to_speech("Okay, waiting 5 minutes.")
+            play_audio(OUTPUT_FILENAME)
+            time.sleep(5)
+            
+            text_to_speech("Five minutes have passed. Did you take your medicine?")
+            play_audio(OUTPUT_FILENAME)
+            
+            audio_file = record_audio()
+            text = speech_to_text(audio_file)
+            
+            if text and ("yes" in text.lower() or "took" in text.lower()):
+                 log_medication(patient_name, "TAKEN")
+                 text_to_speech("Great. Recorded.")
+                 play_audio(OUTPUT_FILENAME)
+                 return
+            else:
+                 # Loop back if reminders < 4
+                 reminders_count += 1
+                 if reminders_count < max_reminders:
+                     text_to_speech("Please take your medicine.")
+                     play_audio(OUTPUT_FILENAME)
+                 continue
+                 
+        else:
+            # Unclear/Other -> Loop back
+            reminders_count += 1
+            if reminders_count < max_reminders:
+                text_to_speech("I didn't understand. Please take your medicine.")
+                play_audio(OUTPUT_FILENAME)
+    
+    # If loop finishes (max reminders reached)
+    print("* Max reminders reached. Sending Alert...")
+    text_to_speech("Max reminders reached. Sending WhatsApp alert.")
+    play_audio(OUTPUT_FILENAME)
+    log_medication(patient_name, "MISSED")
+
 def main():
     try:
-        # 1. Record
-        audio_file = record_audio()
-
-        # 2. Transcribe
-        text = speech_to_text(audio_file)
-
-        if text:
-            # 3. Analyze Intent
-            intent_data = process_intent(text)
-
-            response_speech = ""
-
-            if intent_data["intent"] == "MEDICATION_LOG":
-                success, msg = log_medication(
-                    intent_data["patient_name"],
-                    intent_data["status"],
-                    intent_data.get("notes"),
-                )
-                if success:
-                    response_speech = f"Okay, I've marked {intent_data['patient_name']} as {intent_data['status']}."
-                else:
-                    response_speech = f"I couldn't log that because {msg}"
-
-            elif intent_data["intent"] == "NEW_PATIENT":
-                # Simplified: In a real app, this would be a multi-turn convo.
-                # Here we assume the user said everything in one go or Gemini extracted partials.
-                name = intent_data.get("name")
-                medicine = intent_data.get("medicine")
-                time_due = intent_data.get("time")
-
-                if name and medicine:
-                    add_new_patient(name, medicine, time_due)
-                    response_speech = f"I've added {name} taking {medicine}."
-                else:
-                    response_speech = (
-                        "To add a patient, please say their name, medicine, and time."
-                    )
-
-            elif intent_data["intent"] == "INTRODUCTION":
-                intros = [
-                    "Hello! I am your Medication Manager. I help you track your daily medicines. You can tell me when you've taken your medicine, or add a new patient.",
-                    "Hi there! I'm here to help you remember your meds. Just let me know when you've taken them.",
-                    "Greetings. I am the Medication Manager assistant. I keep track of your schedule and can help you add new patients.",
-                    "Hello. I'm ready to help with your medication schedule. What can I do for you today?"
-                ]
-                response_speech = random.choice(intros)
-
-            else:
-                response_speech = intent_data.get(
-                    "response", "I didn't quite catch that."
-                )
-
-            # 4. Synthesize Response
-            success = text_to_speech(response_speech)
-            if success:
-                play_audio(OUTPUT_FILENAME)
-        else:
-            text_to_speech("I didn't hear anything.")
-            play_audio(OUTPUT_FILENAME)
-
+        # For testing, jump straight into the flow for Grandpa Joe
+        run_reminder_flow("Grandpa Joe")
+                
     except KeyboardInterrupt:
         print("\nExiting...")
         pixels.off()
     except Exception as e:
         print(f"Error: {e}")
         pixels.off()
-
 
 if __name__ == "__main__":
     main()
