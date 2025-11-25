@@ -39,18 +39,22 @@ SILENCE_THRESHOLD = 500
 SILENCE_DURATION = 2.0
 MAX_RECORD_SECONDS = 10
 
+
 # Database Helper
 def get_db_connection():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     return conn
 
+
 def add_new_patient(name, medicine, time_due):
     try:
         conn = get_db_connection()
         c = conn.cursor()
-        c.execute("INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", 
-                  (name, medicine, time_due))
+        c.execute(
+            "INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)",
+            (name, medicine, time_due),
+        )
         conn.commit()
         conn.close()
         return True
@@ -58,40 +62,45 @@ def add_new_patient(name, medicine, time_due):
         print(f"DB Error: {e}")
         return False
 
+
 def log_medication(patient_name, status, notes=None):
     try:
         conn = get_db_connection()
         c = conn.cursor()
-        
+
         # Find patient ID (simple lookup by name for now)
         # In a real scenario, might need clarification if duplicates exist
         c.execute("SELECT id FROM patients WHERE name LIKE ?", (f"%{patient_name}%",))
         patient = c.fetchone()
-        
+
         if not patient:
             conn.close()
             return False, "Patient not found."
-            
-        patient_id = patient['id']
+
+        patient_id = patient["id"]
         date_str = datetime.now().strftime("%Y-%m-%d")
         time_str = datetime.now().strftime("%H:%M:%S")
-        
+
         # Upsert log
-        c.execute("""
+        c.execute(
+            """
             INSERT INTO medication_logs (patient_id, date, time_taken, status, notes)
             VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(patient_id, date) DO UPDATE SET
             status=excluded.status,
             time_taken=excluded.time_taken,
             notes=excluded.notes
-        """, (patient_id, date_str, time_str, status, notes))
-        
+        """,
+            (patient_id, date_str, time_str, status, notes),
+        )
+
         conn.commit()
         conn.close()
         return True, "Success"
     except Exception as e:
         print(f"DB Error: {e}")
         return False, str(e)
+
 
 # Check credentials
 if not os.path.exists(CREDENTIALS_FILE):
@@ -105,7 +114,7 @@ try:
     with open(CREDENTIALS_FILE, "r") as f:
         creds_data = json.load(f)
         project_id = creds_data.get("project_id")
-    
+
     vertexai.init(project=project_id, location="us-central1")
 
     # Initialize the model with Structured Output instructions
@@ -119,7 +128,7 @@ try:
             "Structure for MEDICATION_LOG: { 'intent': 'MEDICATION_LOG', 'patient_name': '...', 'status': 'TAKEN'/'MISSED', 'notes': '...' }",
             "Structure for NEW_PATIENT: { 'intent': 'NEW_PATIENT', 'name': '...', 'medicine': '...', 'time': '...' }",
             "Structure for UNKNOWN: { 'intent': 'UNKNOWN', 'response': '...' }",
-            "If the user says 'I took my meds' and doesn't specify a name, assume 'Grandpa Joe' for now."
+            "If the user says 'I took my meds' and doesn't specify a name, infer the patient name based on who has a medication due around the current time. If unsure, return intent: UNKNOWN with response asking for the name."
         ],
     )
     print(f"* Vertex AI Initialized with model: {GEMINI_MODEL_NAME}")
@@ -147,20 +156,20 @@ def record_audio():
         chunks_per_second = RESPEAKER_RATE / CHUNK
         max_silent_chunks = int(chunks_per_second * SILENCE_DURATION)
         max_total_chunks = int(chunks_per_second * MAX_RECORD_SECONDS)
-        
+
         chunk_count = 0
-        
+
         while True:
             data = stream.read(CHUNK, exception_on_overflow=False)
             frames.append(data)
             chunk_count += 1
-            
+
             rms = audioop.rms(data, 2)
             if rms < SILENCE_THRESHOLD:
                 silent_chunks += 1
             else:
                 silent_chunks = 0
-            
+
             if silent_chunks > max_silent_chunks or chunk_count > max_total_chunks:
                 break
 
@@ -261,52 +270,79 @@ def play_audio(audio_file):
 def process_intent(text):
     print(f"* Analyzing Intent with Gemini: '{text}'")
     pixels.think()
+    
+    # Context Injection: Fetch patient schedules to help Gemini infer the name
     try:
-        response = model.generate_content(text)
+        conn = get_db_connection()
+        patients = conn.execute("SELECT name, time_due FROM patients").fetchall()
+        conn.close()
+        
+        patient_context = "Current Patient List: " + ", ".join([f"{p['name']} (Due: {p['time_due']})" for p in patients])
+        current_time = datetime.now().strftime("%H:%M")
+        full_prompt = f"Current Time: {current_time}. {patient_context}. User says: '{text}'"
+        
+    except Exception as e:
+        print(f"DB Context Error: {e}")
+        full_prompt = text
+
+    try:
+        response = model.generate_content(full_prompt)
         cleaned_text = response.text.strip().replace("```json", "").replace("```", "")
         data = json.loads(cleaned_text)
         print(f"Gemini Intent: {data}")
         return data
     except Exception as e:
         print(f"Gemini Error: {e}")
-        return {"intent": "UNKNOWN", "response": "I'm having trouble understanding right now."}
+        return {
+            "intent": "UNKNOWN",
+            "response": "I'm having trouble understanding right now.",
+        }
+
 
 def main():
     try:
         # 1. Record
         audio_file = record_audio()
-        
+
         # 2. Transcribe
         text = speech_to_text(audio_file)
-        
+
         if text:
             # 3. Analyze Intent
             intent_data = process_intent(text)
-            
+
             response_speech = ""
-            
-            if intent_data['intent'] == 'MEDICATION_LOG':
-                success, msg = log_medication(intent_data['patient_name'], intent_data['status'], intent_data.get('notes'))
+
+            if intent_data["intent"] == "MEDICATION_LOG":
+                success, msg = log_medication(
+                    intent_data["patient_name"],
+                    intent_data["status"],
+                    intent_data.get("notes"),
+                )
                 if success:
                     response_speech = f"Okay, I've marked {intent_data['patient_name']} as {intent_data['status']}."
                 else:
                     response_speech = f"I couldn't log that because {msg}"
 
-            elif intent_data['intent'] == 'NEW_PATIENT':
+            elif intent_data["intent"] == "NEW_PATIENT":
                 # Simplified: In a real app, this would be a multi-turn convo.
                 # Here we assume the user said everything in one go or Gemini extracted partials.
-                name = intent_data.get('name')
-                medicine = intent_data.get('medicine')
-                time_due = intent_data.get('time')
-                
+                name = intent_data.get("name")
+                medicine = intent_data.get("medicine")
+                time_due = intent_data.get("time")
+
                 if name and medicine:
                     add_new_patient(name, medicine, time_due)
                     response_speech = f"I've added {name} taking {medicine}."
                 else:
-                    response_speech = "To add a patient, please say their name, medicine, and time."
-                    
+                    response_speech = (
+                        "To add a patient, please say their name, medicine, and time."
+                    )
+
             else:
-                response_speech = intent_data.get('response', "I didn't quite catch that.")
+                response_speech = intent_data.get(
+                    "response", "I didn't quite catch that."
+                )
 
             # 4. Synthesize Response
             success = text_to_speech(response_speech)
@@ -315,13 +351,14 @@ def main():
         else:
             text_to_speech("I didn't hear anything.")
             play_audio(OUTPUT_FILENAME)
-                
+
     except KeyboardInterrupt:
         print("\nExiting...")
         pixels.off()
     except Exception as e:
         print(f"Error: {e}")
         pixels.off()
+
 
 if __name__ == "__main__":
     main()
