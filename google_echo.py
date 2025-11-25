@@ -182,11 +182,14 @@ def record_audio():
         stream.stop_stream()
         stream.close()
 
+        # Add 0.5s silence at start padding
+        silence = b'\x00' * int(RESPEAKER_RATE * RESPEAKER_WIDTH * 0.5)
+        
         wf = wave.open(INPUT_FILENAME, "wb")
         wf.setnchannels(RESPEAKER_CHANNELS)
         wf.setsampwidth(p.get_sample_size(p.get_format_from_width(RESPEAKER_WIDTH)))
         wf.setframerate(RESPEAKER_RATE)
-        wf.writeframes(b"".join(frames))
+        wf.writeframes(silence + b"".join(frames))
         wf.close()
 
     finally:
