@@ -30,7 +30,7 @@ OUTPUT_FILENAME = "output_response.wav"
 # Silence detection settings
 SILENCE_THRESHOLD = 500  # Adjust based on your microphone and environment
 SILENCE_DURATION = 2.0  # Seconds of silence to stop recording
-MAX_RECORD_SECONDS = 30  # Maximum recording length safety
+MAX_RECORD_SECONDS = 10  # Maximum recording length safety
 
 
 # Check credentials
@@ -62,28 +62,28 @@ def record_audio():
         chunks_per_second = RESPEAKER_RATE / CHUNK
         max_silent_chunks = int(chunks_per_second * SILENCE_DURATION)
         max_total_chunks = int(chunks_per_second * MAX_RECORD_SECONDS)
-        
+
         chunk_count = 0
-        
+
         while True:
             data = stream.read(CHUNK, exception_on_overflow=False)
             frames.append(data)
             chunk_count += 1
-            
+
             # Check for silence
             # We calculate RMS of the audio chunk
             rms = audioop.rms(data, 2)  # width=2 for 16-bit audio
-            
+
             if rms < SILENCE_THRESHOLD:
                 silent_chunks += 1
             else:
                 silent_chunks = 0
-            
+
             # Stop if silence is long enough
             if silent_chunks > max_silent_chunks:
                 print("* Silence detected, stopping recording.")
                 break
-                
+
             # Stop if too long
             if chunk_count > max_total_chunks:
                 print("* Max duration reached, stopping recording.")
