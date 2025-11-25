@@ -131,8 +131,8 @@ try:
             "Structure for DELAY: { 'intent': 'DELAY', 'duration': '...' }",
             "Structure for CONFIRMATION: { 'intent': 'CONFIRMATION', 'value': 'YES'/'NO' }",
             "Structure for UNKNOWN: { 'intent': 'UNKNOWN', 'response': '...' }",
-            "If the user says 'Yes', 'Yeah', 'I did', return intent: CONFIRMATION value: YES.",
-            "If the user says 'No', 'Nope', return intent: CONFIRMATION value: NO.",
+            "If the user says 'Yes', 'Yeah', 'I did', 'I already did', 'It's done', return intent: CONFIRMATION value: YES.",
+            "If the user says 'No', 'Nope', 'Not yet', return intent: CONFIRMATION value: NO.",
             "If the user says 'I will take it later' or 'Give me 5 minutes', return intent: DELAY.",
             "If the user says 'I took my meds' and doesn't specify a name, infer the patient name based on who has a medication due around the current time. If unsure, return intent: UNKNOWN with response asking for the name.",
         ],
@@ -358,51 +358,66 @@ def run_reminder_flow(patient_name="Grandpa Joe"):
         # Analyze Intent
         intent_data = process_intent(text)
 
-        if (intent_data['intent'] == 'MEDICATION_LOG' and intent_data.get('status') == 'TAKEN') or \
-           (intent_data['intent'] == 'CONFIRMATION' and intent_data.get('value') == 'YES'):
+        if (
+            intent_data["intent"] == "MEDICATION_LOG"
+            and intent_data.get("status") == "TAKEN"
+        ) or (
+            intent_data["intent"] == "CONFIRMATION"
+            and intent_data.get("value") == "YES"
+        ):
             # "Already took it" or "Yes" -> End
             log_medication(patient_name, "TAKEN")
             text_to_speech("Thank you. Have a nice day.")
             play_audio(OUTPUT_FILENAME)
             return
-            
-        elif intent_data['intent'] == 'DELAY':
+
+        elif intent_data["intent"] == "DELAY":
             # "I will take it in 5 mins" -> Wait 5 mins (simulated 5s) -> Check Pillbox
             print("* User requested delay. Waiting 5 seconds (simulated 5 mins)...")
             text_to_speech("Okay, waiting 5 minutes.")
             play_audio(OUTPUT_FILENAME)
             time.sleep(5)
-            
+
             text_to_speech("Five minutes have passed. Did you take your medicine?")
             play_audio(OUTPUT_FILENAME)
-            
+
             audio_file = record_audio()
             text = speech_to_text(audio_file)
-            
+
             # Re-process intent for the follow-up
             intent_data = process_intent(text)
-            
-            if (intent_data['intent'] == 'MEDICATION_LOG' and intent_data.get('status') == 'TAKEN') or \
-               (intent_data['intent'] == 'CONFIRMATION' and intent_data.get('value') == 'YES') or \
-               (text and "yes" in text.lower()): # Fallback text check
-                 log_medication(patient_name, "TAKEN")
-                 text_to_speech("Great. Recorded.")
-                 play_audio(OUTPUT_FILENAME)
-                 return
+
+            if (
+                (
+                    intent_data["intent"] == "MEDICATION_LOG"
+                    and intent_data.get("status") == "TAKEN"
+                )
+                or (
+                    intent_data["intent"] == "CONFIRMATION"
+                    and intent_data.get("value") == "YES"
+                )
+                or (text and "yes" in text.lower())
+            ):  # Fallback text check
+                log_medication(patient_name, "TAKEN")
+                text_to_speech("Great. Recorded.")
+                play_audio(OUTPUT_FILENAME)
+                return
             else:
-                 # Loop back if reminders < 4
-                 reminders_count += 1
-                 if reminders_count < max_reminders:
-                     text_to_speech("Please take your medicine.")
-                     play_audio(OUTPUT_FILENAME)
-                 continue
-                 
-        elif intent_data['intent'] == 'CONFIRMATION' and intent_data.get('value') == 'NO':
-             # "No" -> Loop back (reminder)
-             text_to_speech("Please take your medicine now.")
-             play_audio(OUTPUT_FILENAME)
-             reminders_count += 1
-             continue
+                # Loop back if reminders < 4
+                reminders_count += 1
+                if reminders_count < max_reminders:
+                    text_to_speech("Please take your medicine.")
+                    play_audio(OUTPUT_FILENAME)
+                continue
+
+        elif (
+            intent_data["intent"] == "CONFIRMATION" and intent_data.get("value") == "NO"
+        ):
+            # "No" -> Loop back (reminder)
+            text_to_speech("Please take your medicine now.")
+            play_audio(OUTPUT_FILENAME)
+            reminders_count += 1
+            continue
 
         else:
             # Unclear/Other -> Loop back
