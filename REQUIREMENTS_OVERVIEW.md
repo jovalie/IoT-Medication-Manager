@@ -54,10 +54,12 @@ Two tables to support multiple patients:
 
 A lightweight web server hosted on the Raspberry Pi (accessible via local network IP).
 
-### 4.0. Patient Selection
-*   **Landing Page:** Select which patient profile to view or manage.
+### 4.0. Caregiver Overview (Landing Page)
+*   **Patient List:** Overview of all tracked patients.
+*   **Status Indicators:** Quick visual check (Red/Green) next to each name for *Today's* status.
+*   **Navigation:** Click a patient to view their individual Dashboard/Calendar.
 
-### 4.1. Dashboard View (Home)
+### 4.1. Patient Dashboard (Detail View)
 *   **Current Status:** Big visual indicator for *Today* (e.g., Large Green Checkmark or Orange "Waiting").
 *   **Action Button:** A manual "I took my meds" button (in case voice interaction isn't used).
 
