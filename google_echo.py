@@ -124,14 +124,17 @@ try:
             "You are a helpful medication manager assistant.",
             "You analyze what the user says and extract the intent.",
             "Return ONLY a JSON object. Do not include markdown formatting.",
-            "Possible intents: 'MEDICATION_LOG', 'NEW_PATIENT', 'INTRODUCTION', 'DELAY', 'UNKNOWN'.",
+            "Possible intents: 'MEDICATION_LOG', 'NEW_PATIENT', 'INTRODUCTION', 'DELAY', 'CONFIRMATION', 'UNKNOWN'.",
             "Structure for MEDICATION_LOG: { 'intent': 'MEDICATION_LOG', 'patient_name': '...', 'status': 'TAKEN'/'MISSED', 'notes': '...' }",
             "Structure for NEW_PATIENT: { 'intent': 'NEW_PATIENT', 'name': '...', 'medicine': '...', 'time': '...' }",
             "Structure for INTRODUCTION: { 'intent': 'INTRODUCTION' }",
             "Structure for DELAY: { 'intent': 'DELAY', 'duration': '...' }",
+            "Structure for CONFIRMATION: { 'intent': 'CONFIRMATION', 'value': 'YES'/'NO' }",
             "Structure for UNKNOWN: { 'intent': 'UNKNOWN', 'response': '...' }",
+            "If the user says 'Yes', 'Yeah', 'I did', return intent: CONFIRMATION value: YES.",
+            "If the user says 'No', 'Nope', return intent: CONFIRMATION value: NO.",
             "If the user says 'I will take it later' or 'Give me 5 minutes', return intent: DELAY.",
-            "If the user says 'I took my meds' and doesn't specify a name, infer the patient name based on who has a medication due around the current time. If unsure, return intent: UNKNOWN with response asking for the name."
+            "If the user says 'I took my meds' and doesn't specify a name, infer the patient name based on who has a medication due around the current time. If unsure, return intent: UNKNOWN with response asking for the name.",
         ],
     )
     print(f"* Vertex AI Initialized with model: {GEMINI_MODEL_NAME}")
@@ -308,51 +311,56 @@ def process_intent(text):
 
 def run_reminder_flow(patient_name="Grandpa Joe"):
     print(f"\n--- Starting Reminder Flow for {patient_name} ---")
-    
+
     reminders_count = 0
     max_reminders = 4
-    
+
     # 1. Play Reminder 1
     text_to_speech(f"Hello {patient_name}. Please take your medicine.")
     play_audio(OUTPUT_FILENAME)
-    
+
     while reminders_count < max_reminders:
         print(f"\n[Reminder Loop: {reminders_count + 1}/{max_reminders}]")
-        
+
         # Listen for response
         audio_file = record_audio()
         text = speech_to_text(audio_file)
-        
+
         if not text:
             # NO RESPONSE -> Wait 15 mins (simulated 5s) -> Check Pillbox (Voice)
             print("* No response. Waiting 5 seconds (simulated 15 mins)...")
             time.sleep(5)
-            
+
             # Check pillbox (Simulated by asking again)
-            text_to_speech("I noticed you haven't responded. Did you open your pillbox?")
+            text_to_speech(
+                "I noticed you haven't responded. Did you open your pillbox?"
+            )
             play_audio(OUTPUT_FILENAME)
-            
+
             audio_file = record_audio()
             text = speech_to_text(audio_file)
-            
+
             if text and "yes" in text.lower():
-                 text_to_speech("Great. Recording that you took it.")
-                 play_audio(OUTPUT_FILENAME)
-                 log_medication(patient_name, "TAKEN")
-                 return
+                text_to_speech("Great. Recording that you took it.")
+                play_audio(OUTPUT_FILENAME)
+                log_medication(patient_name, "TAKEN")
+                return
             else:
-                 # No -> Send Alert -> End
-                 print("* Sending WhatsApp Alert...")
-                 text_to_speech(f"Alerting caregiver that {patient_name} has not taken medication.")
-                 play_audio(OUTPUT_FILENAME)
-                 log_medication(patient_name, "MISSED")
-                 return
+                # No -> Send Alert -> End
+                print("* Sending WhatsApp Alert...")
+                text_to_speech(
+                    f"Alerting caregiver that {patient_name} has not taken medication."
+                )
+                play_audio(OUTPUT_FILENAME)
+                log_medication(patient_name, "MISSED")
+                return
 
         # Analyze Intent
         intent_data = process_intent(text)
-        
-        if intent_data['intent'] == 'MEDICATION_LOG' and intent_data.get('status') == 'TAKEN':
-            # "Already took it" -> End
+
+        if (intent_data['intent'] == 'MEDICATION_LOG' and intent_data.get('status') == 'TAKEN') or \
+           (intent_data['intent'] == 'CONFIRMATION' and intent_data.get('value') == 'YES'):
+            # "Already took it" or "Yes" -> End
             log_medication(patient_name, "TAKEN")
             text_to_speech("Thank you. Have a nice day.")
             play_audio(OUTPUT_FILENAME)
@@ -371,7 +379,12 @@ def run_reminder_flow(patient_name="Grandpa Joe"):
             audio_file = record_audio()
             text = speech_to_text(audio_file)
             
-            if text and ("yes" in text.lower() or "took" in text.lower()):
+            # Re-process intent for the follow-up
+            intent_data = process_intent(text)
+            
+            if (intent_data['intent'] == 'MEDICATION_LOG' and intent_data.get('status') == 'TAKEN') or \
+               (intent_data['intent'] == 'CONFIRMATION' and intent_data.get('value') == 'YES') or \
+               (text and "yes" in text.lower()): # Fallback text check
                  log_medication(patient_name, "TAKEN")
                  text_to_speech("Great. Recorded.")
                  play_audio(OUTPUT_FILENAME)
@@ -384,30 +397,39 @@ def run_reminder_flow(patient_name="Grandpa Joe"):
                      play_audio(OUTPUT_FILENAME)
                  continue
                  
+        elif intent_data['intent'] == 'CONFIRMATION' and intent_data.get('value') == 'NO':
+             # "No" -> Loop back (reminder)
+             text_to_speech("Please take your medicine now.")
+             play_audio(OUTPUT_FILENAME)
+             reminders_count += 1
+             continue
+
         else:
             # Unclear/Other -> Loop back
             reminders_count += 1
             if reminders_count < max_reminders:
                 text_to_speech("I didn't understand. Please take your medicine.")
                 play_audio(OUTPUT_FILENAME)
-    
+
     # If loop finishes (max reminders reached)
     print("* Max reminders reached. Sending Alert...")
     text_to_speech("Max reminders reached. Sending WhatsApp alert.")
     play_audio(OUTPUT_FILENAME)
     log_medication(patient_name, "MISSED")
 
+
 def main():
     try:
         # For testing, jump straight into the flow for Grandpa Joe
         run_reminder_flow("Grandpa Joe")
-                
+
     except KeyboardInterrupt:
         print("\nExiting...")
         pixels.off()
     except Exception as e:
         print(f"Error: {e}")
         pixels.off()
+
 
 if __name__ == "__main__":
     main()
