@@ -2,3 +2,5 @@ spidev
 gpiozero
 pyaudio
 RPi.GPIO
+SpeechRecognition
+gTTS
