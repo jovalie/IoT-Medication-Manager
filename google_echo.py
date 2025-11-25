@@ -1,88 +1,197 @@
-import speech_recognition as sr
-from gtts import gTTS
 import os
 import sys
 import time
+import wave
+import pyaudio
 
-# Add the interfaces directory to the path so we can import Pixels
+# Add interfaces path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'interfaces'))
 
 try:
     from pixels import pixels
 except ImportError:
-    print("Could not import pixels. Please check your project structure.")
+    print("Could not import pixels. Check project structure.")
     sys.exit(1)
 
-def listen_and_recognize():
-    recognizer = sr.Recognizer()
-    microphone = sr.Microphone(device_index=2) # Using ReSpeaker index
+from google.cloud import speech
+from google.cloud import texttospeech
 
-    print("Listening...")
+# Configuration
+CREDENTIALS_FILE = "google_credentials.json"
+RESPEAKER_RATE = 16000
+RESPEAKER_CHANNELS = 2
+RESPEAKER_WIDTH = 2
+RESPEAKER_INDEX = 2  # Adjust if needed
+CHUNK = 1024
+RECORD_SECONDS = 5
+INPUT_FILENAME = "input_request.wav"
+OUTPUT_FILENAME = "output_response.wav"
+
+# Check credentials
+if not os.path.exists(CREDENTIALS_FILE):
+    print(f"Error: {CREDENTIALS_FILE} not found!")
+    print("Please download your service account key from Google Cloud Console,")
+    print("rename it to 'google_credentials.json', and place it in this folder.")
+    sys.exit(1)
+
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = CREDENTIALS_FILE
+
+def record_audio():
+    print(f"* Recording for {RECORD_SECONDS} seconds...")
     pixels.listen()
     
-    with microphone as source:
-        recognizer.adjust_for_ambient_noise(source)
-        try:
-            audio = recognizer.listen(source, timeout=5)
-        except sr.WaitTimeoutError:
-            print("Timeout: No speech detected")
-            pixels.off()
-            return None
-
-    pixels.think()
-    print("Recognizing...")
-    
+    p = pyaudio.PyAudio()
     try:
-        # Use Google Speech Recognition
-        text = recognizer.recognize_google(audio)
+        stream = p.open(
+            rate=RESPEAKER_RATE,
+            format=p.get_format_from_width(RESPEAKER_WIDTH),
+            channels=RESPEAKER_CHANNELS,
+            input=True,
+            input_device_index=RESPEAKER_INDEX,
+        )
+        
+        frames = []
+        for _ in range(0, int(RESPEAKER_RATE / CHUNK * RECORD_SECONDS)):
+            data = stream.read(CHUNK)
+            frames.append(data)
+            
+        stream.stop_stream()
+        stream.close()
+        
+        # Save to file
+        wf = wave.open(INPUT_FILENAME, "wb")
+        wf.setnchannels(RESPEAKER_CHANNELS)
+        wf.setsampwidth(p.get_sample_size(p.get_format_from_width(RESPEAKER_WIDTH)))
+        wf.setframerate(RESPEAKER_RATE)
+        wf.writeframes(b"".join(frames))
+        wf.close()
+        
+    finally:
+        pixels.off()
+        p.terminate()
+        time.sleep(0.1)
+    
+    return INPUT_FILENAME
+
+def speech_to_text(audio_file):
+    print("* Sending to Google Speech-to-Text...")
+    pixels.think()
+    
+    client = speech.SpeechClient()
+
+    with open(audio_file, "rb") as audio:
+        content = audio.read()
+
+    audio = speech.RecognitionAudio(content=content)
+    
+    # Configure for the ReSpeaker audio format
+    config = speech.RecognitionConfig(
+        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+        sample_rate_hertz=RESPEAKER_RATE,
+        language_code="en-US",
+        audio_channel_count=RESPEAKER_CHANNELS, # Important for ReSpeaker
+    )
+
+    try:
+        response = client.recognize(config=config, audio=audio)
+    except Exception as e:
+        print(f"STT Error: {e}")
+        pixels.off()
+        return None
+
+    pixels.off()
+    
+    for result in response.results:
+        text = result.alternatives[0].transcript
         print(f"You said: {text}")
         return text
-    except sr.UnknownValueError:
-        print("Google Speech Recognition could not understand audio")
-    except sr.RequestError as e:
-        print(f"Could not request results from Google Speech Recognition service; {e}")
-    finally:
-        pixels.off()
-    
+        
+    print("No speech detected.")
     return None
 
-def speak_text(text):
-    if not text:
-        return
+def text_to_speech(text):
+    print(f"* Synthesizing speech: '{text}'")
+    pixels.think() # Use think color for processing
+    
+    client = texttospeech.TextToSpeechClient()
+    synthesis_input = texttospeech.SynthesisInput(text=text)
 
-    print(f"Speaking: {text}")
+    # Build the voice request
+    voice = texttospeech.VoiceSelectionParams(
+        language_code="en-US",
+        ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+    )
+
+    # Select the type of audio file you want returned
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.LINEAR16,
+        sample_rate_hertz=16000
+    )
+
+    try:
+        response = client.synthesize_speech(
+            input=synthesis_input, voice=voice, audio_config=audio_config
+        )
+    except Exception as e:
+        print(f"TTS Error: {e}")
+        pixels.off()
+        return False
+
+    with open(OUTPUT_FILENAME, "wb") as out:
+        out.write(response.audio_content)
+        
+    pixels.off()
+    return True
+
+def play_audio(audio_file):
+    print("* Playing response...")
     pixels.speak()
     
+    wf = wave.open(audio_file, 'rb')
+    p = pyaudio.PyAudio()
+    
     try:
-        tts = gTTS(text=text, lang='en')
-        tts.save("response.mp3")
-        # Use mpg321 or omxplayer to play the audio on Pi
-        os.system("mpg321 response.mp3") 
-    except Exception as e:
-        print(f"Error in TTS: {e}")
+        stream = p.open(
+            format=p.get_format_from_width(wf.getsampwidth()),
+            channels=wf.getnchannels(),
+            rate=wf.getframerate(),
+            output=True
+        )
+
+        data = wf.readframes(CHUNK)
+        while data:
+            stream.write(data)
+            data = wf.readframes(CHUNK)
+
+        stream.stop_stream()
+        stream.close()
     finally:
         pixels.off()
-        if os.path.exists("response.mp3"):
-            os.remove("response.mp3")
+        p.terminate()
+        wf.close()
 
 def main():
-    while True:
-        try:
-            text = listen_and_recognize()
-            if text:
-                speak_text(f"You said: {text}")
+    try:
+        # 1. Record
+        audio_file = record_audio()
+        
+        # 2. Transcribe
+        text = speech_to_text(audio_file)
+        
+        if text:
+            # 3. Synthesize
+            success = text_to_speech(text)
             
-            # Optional: Short pause before listening again
-            time.sleep(1)
-            
-        except KeyboardInterrupt:
-            print("\nExiting...")
-            pixels.off()
-            break
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            pixels.off()
-            break
+            if success:
+                # 4. Playback
+                play_audio(OUTPUT_FILENAME)
+                
+    except KeyboardInterrupt:
+        print("\nExiting...")
+        pixels.off()
+    except Exception as e:
+        print(f"Error: {e}")
+        pixels.off()
 
 if __name__ == "__main__":
     main()
