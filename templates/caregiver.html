@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">Caregiver Overview <small class="text-muted">({{ today }})</small></h2>
+    </div>
+</div>
+
+<div class="row">
+    {% for patient in patients %}
+    <div class="col-md-4">
+        <a href="/patient/{{ patient.id }}" style="text-decoration: none; color: inherit;">
+            <div class="card h-100 hover-shadow">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{{ patient.name }}</h5>
+                    <hr>
+                    <p class="card-text">Today's Status:</p>
+                    <div class="d-flex justify-content-center align-items-center">
+                        <span class="status-dot status-{{ patient.status }}" style="width: 30px; height: 30px;"></span>
+                        <span class="h4 mb-0 ms-2">{{ patient.status }}</span>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
+

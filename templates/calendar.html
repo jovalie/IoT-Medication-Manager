@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block head %}
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js'></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var calendarEl = document.getElementById('calendar');
+        var calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth'
+            },
+            events: '/api/patient/{{ patient.id }}/logs',
+            eventClick: function(info) {
+                if (info.event.extendedProps.description) {
+                    alert('Notes: ' + info.event.extendedProps.description);
+                }
+            }
+        });
+        calendar.render();
+    });
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-12">
+        <a href="/" class="btn btn-outline-secondary">&larr; Back to Dashboard</a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h3 class="card-title mb-0">{{ patient.name }}'s Medication Calendar</h3>
+            </div>
+            <div class="card-body">
+                <div id='calendar'></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
