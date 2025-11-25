@@ -33,18 +33,29 @@ The LLM must process the user's spoken response and categorize it into one of th
 To support the Calendar UI, data must be stored persistently on the Raspberry Pi.
 
 ### 3.1. Database Schema (SQLite recommended)
-A simple table `medication_logs` with columns:
+Two tables to support multiple patients:
+
+**Table `patients`**
 *   `id`: Primary Key
-*   `date`: YYYY-MM-DD (Unique constraint - only one entry per day)
+*   `name`: TEXT (e.g., "Grandpa Joe")
+
+**Table `medication_logs`**
+*   `id`: Primary Key
+*   `patient_id`: Foreign Key linking to `patients.id`
+*   `date`: YYYY-MM-DD
 *   `time_taken`: Timestamp
 *   `status`: TEXT ('TAKEN', 'MISSED', 'PENDING')
 *   `notes`: TEXT (Optional transcript of how they felt)
+*   **Constraint:** Unique combination of (`patient_id`, `date`)
 
 ---
 
 ## 4. Web UI Requirements
 
 A lightweight web server hosted on the Raspberry Pi (accessible via local network IP).
+
+### 4.0. Patient Selection
+*   **Landing Page:** Select which patient profile to view or manage.
 
 ### 4.1. Dashboard View (Home)
 *   **Current Status:** Big visual indicator for *Today* (e.g., Large Green Checkmark or Orange "Waiting").
