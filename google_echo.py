@@ -8,6 +8,8 @@ import json
 import sqlite3
 from datetime import datetime
 
+import random
+
 # Add interfaces path
 sys.path.append(os.path.join(os.path.dirname(__file__), "interfaces"))
 
@@ -129,6 +131,7 @@ try:
             "Structure for NEW_PATIENT: { 'intent': 'NEW_PATIENT', 'name': '...', 'medicine': '...', 'time': '...' }",
             "Structure for INTRODUCTION: { 'intent': 'INTRODUCTION' }",
             "Structure for UNKNOWN: { 'intent': 'UNKNOWN', 'response': '...' }",
+            "If the user asks who you are (INTRODUCTION), output intent 'INTRODUCTION'. Do NOT generate the response text in JSON, the system will handle it.",
             "If the user says 'I took my meds' and doesn't specify a name, infer the patient name based on who has a medication due around the current time. If unsure, return intent: UNKNOWN with response asking for the name.",
         ],
     )
@@ -345,7 +348,13 @@ def main():
                     )
 
             elif intent_data["intent"] == "INTRODUCTION":
-                response_speech = "Hello! I am your Medication Manager. I help you track your daily medicines. You can tell me when you've taken your pills, or add a new patient."
+                intros = [
+                    "Hello! I am your Medication Manager. I help you track your daily medicines. You can tell me when you've taken your medicine, or add a new patient.",
+                    "Hi there! I'm here to help you remember your meds. Just let me know when you've taken them.",
+                    "Greetings. I am the Medication Manager assistant. I keep track of your schedule and can help you add new patients.",
+                    "Hello. I'm ready to help with your medication schedule. What can I do for you today?"
+                ]
+                response_speech = random.choice(intros)
 
             else:
                 response_speech = intent_data.get(
