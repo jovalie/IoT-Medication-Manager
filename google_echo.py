@@ -8,15 +8,36 @@ import json
 import sqlite3
 from datetime import datetime
 import random
+import argparse
 
 # Add interfaces path
 sys.path.append(os.path.join(os.path.dirname(__file__), "interfaces"))
 
-try:
-    from pixels import pixels
-except ImportError:
-    print("Could not import pixels. Check project structure.")
-    sys.exit(1)
+# --- Argument Parser for Test Mode ---
+parser = argparse.ArgumentParser(description="Medication Manager Voice Assistant")
+parser.add_argument('--no-pi', action='store_true', help="Run in local test mode without Pi hardware (mic, LEDs).")
+args = parser.parse_args()
+
+# --- Conditional Hardware Imports & Mocks ---
+if args.no_pi:
+    print("--- RUNNING IN LOCAL TEST MODE (--no-pi) ---")
+    class MockPixels:
+        def listen(self): print("\n[LED: LISTENING]")
+        def think(self): print("[LED: THINKING]")
+        def speak(self): print("[LED: SPEAKING]")
+        def off(self): print("[LED: OFF]")
+    pixels = MockPixels()
+else:
+    try:
+        sys.path.append(os.path.join(os.path.dirname(__file__), "interfaces"))
+        from pixels import pixels
+        import pyaudio
+        import audioop
+    except ImportError as e:
+        print(f"FATAL: Hardware library import failed: {e}")
+        print("For local testing, run with the --no-pi flag.")
+        sys.exit(1)
+
 
 from google.cloud import speech
 from google.cloud import texttospeech
@@ -144,6 +165,12 @@ except Exception as e:
 
 
 def record_audio():
+    if args.no_pi:
+        pixels.listen()
+        text_input = input("🎤 YOU (type response): ")
+        pixels.off()
+        return text_input  # In test mode, we return the text directly
+    
     print(f"* Recording until {SILENCE_DURATION} seconds of silence...")
     pixels.listen()
 
@@ -200,11 +227,15 @@ def record_audio():
     return INPUT_FILENAME
 
 
-def speech_to_text(audio_file):
+def speech_to_text(audio_or_text):
+    if args.no_pi:
+        print(f"You said: {audio_or_text}")
+        return audio_or_text # Passthrough in test mode
+        
     print("* Sending to Google Speech-to-Text...")
     pixels.think()
     client = speech.SpeechClient()
-    with open(audio_file, "rb") as audio:
+    with open(audio_or_text, "rb") as audio:
         content = audio.read()
     audio = speech.RecognitionAudio(content=content)
     config = speech.RecognitionConfig(
@@ -228,6 +259,10 @@ def speech_to_text(audio_file):
 
 
 def text_to_speech(text):
+    if args.no_pi:
+        print(f"🔊 ASSISTANT (would say): {text}")
+        return True # Simulate success
+        
     print(f"* Synthesizing speech: '{text}'")
     pixels.think()
     client = texttospeech.TextToSpeechClient()
@@ -253,6 +288,10 @@ def text_to_speech(text):
 
 
 def play_audio(audio_file):
+    if args.no_pi:
+        # Already printed in text_to_speech for test mode
+        return
+
     print("* Playing response...")
     pixels.speak()
     wf = wave.open(audio_file, "rb")
@@ -439,7 +478,9 @@ def run_reminder_flow(patient_name, medicine, time_due):
 def main():
     try:
         conn = get_db_connection()
-        patients = conn.execute("SELECT name, medicine, time_due FROM patients ORDER BY id").fetchall()
+        patients = conn.execute(
+            "SELECT name, medicine, time_due FROM patients ORDER BY id"
+        ).fetchall()
         conn.close()
 
         for patient in patients:
