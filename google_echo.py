@@ -438,8 +438,14 @@ def run_reminder_flow(patient_name="Grandpa Albert"):
 
 def main():
     try:
-        # For testing, jump straight into the flow for Grandpa Albert
-        run_reminder_flow("Grandpa Albert")
+        conn = get_db_connection()
+        patients = conn.execute("SELECT name FROM patients ORDER BY id").fetchall()
+        conn.close()
+
+        for patient in patients:
+            run_reminder_flow(patient['name'])
+            print(f"--- Finished flow for {patient['name']}. Starting next in 3 seconds... ---")
+            time.sleep(3)
 
     except KeyboardInterrupt:
         print("\nExiting...")
