@@ -312,14 +312,14 @@ def process_intent(text):
         }
 
 
-def run_reminder_flow(patient_name="Grandpa Albert"):
+def run_reminder_flow(patient_name, medicine, time_due):
     print(f"\n--- Starting Reminder Flow for {patient_name} ---")
 
     reminders_count = 0
     max_reminders = 4
 
-    # 1. Play Reminder 1
-    text_to_speech(f"Hello {patient_name}. Please take your medicine.")
+    # 1. Play Reminder 1 with medication details
+    text_to_speech(f"Hello {patient_name}. It's {time_due}, time for your {medicine}.")
     play_audio(OUTPUT_FILENAME)
 
     while reminders_count < max_reminders:
@@ -439,12 +439,14 @@ def run_reminder_flow(patient_name="Grandpa Albert"):
 def main():
     try:
         conn = get_db_connection()
-        patients = conn.execute("SELECT name FROM patients ORDER BY id").fetchall()
+        patients = conn.execute("SELECT name, medicine, time_due FROM patients ORDER BY id").fetchall()
         conn.close()
 
         for patient in patients:
-            run_reminder_flow(patient['name'])
-            print(f"--- Finished flow for {patient['name']}. Starting next in 3 seconds... ---")
+            run_reminder_flow(patient["name"], patient["medicine"], patient["time_due"])
+            print(
+                f"--- Finished flow for {patient['name']}. Starting next in 3 seconds... ---"
+            )
             time.sleep(3)
 
     except KeyboardInterrupt:
