@@ -66,32 +66,43 @@ def seed_data(conn):
     c.execute("SELECT id, name FROM patients")
     patient_list = c.fetchall()
     
-    # Insert logs for the last 7 days
-    today = datetime.now().date()
-    statuses = ["TAKEN", "TAKEN", "MISSED", "TAKEN", "PENDING", "TAKEN", "TAKEN"]
+    # Insert logs for the entire month of November 2025
+    year = 2025
+    month = 11
+    num_days = 30 # November has 30 days
     
     for pid, name in patient_list:
-        print(f"Seeding data for {name}...")
-        for i in range(7):
-            day_offset = 6 - i # 6 days ago to today
-            log_date = (today - timedelta(days=day_offset)).strftime("%Y-%m-%d")
-            status = statuses[i % len(statuses)]
+        print(f"Seeding November data for {name}...")
+        for day in range(1, num_days + 1):
+            log_date = f"{year}-{month:02d}-{day:02d}"
             
-            # For "PENDING" (which usually means today/future), let's make past days MISSED if pending
-            if status == "PENDING" and day_offset > 0:
+            # Create more varied statuses
+            if (pid + day) % 5 == 0:
                 status = "MISSED"
-            
+            elif (pid + day) % 13 == 0:
+                status = "PENDING"
+            else:
+                status = "TAKEN"
+
+            # Don't create future pending logs
+            if datetime.strptime(log_date, "%Y-%m-%d").date() > datetime.now().date():
+                continue
+
+            # If today is in November, ensure today's status is PENDING
+            if datetime.strptime(log_date, "%Y-%m-%d").date() == datetime.now().date():
+                status = "PENDING"
+
             time_taken = None
             if status == "TAKEN":
                 time_taken = "09:00:00"
             
             c.execute("""
-                INSERT INTO medication_logs (patient_id, date, time_taken, status, notes)
+                INSERT OR IGNORE INTO medication_logs (patient_id, date, time_taken, status, notes)
                 VALUES (?, ?, ?, ?, ?)
-            """, (pid, log_date, time_taken, status, "Routine check"))
+            """, (pid, log_date, time_taken, status, "Seeded data"))
             
     conn.commit()
-    print("Dummy data seeded.")
+    print("Dummy data for November seeded.")
 
 def main():
     if os.path.exists(DB_NAME):
