@@ -88,34 +88,19 @@ def get_patient_logs(patient_id):
     return jsonify(events)
 
 
-@app.route("/api/update_status", methods=["POST"])
-def update_status():
-    """Manually update a patient's status."""
-    data = request.json
-    patient_id = data.get("patient_id")
-    status = data.get("status")
-    
-    if not patient_id or not status:
-        return jsonify({"success": False, "error": "Missing data"}), 400
-        
-    today = datetime.now().strftime("%Y-%m-%d")
-    time_now = datetime.now().strftime("%H:%M:%S")
-    
+@app.route("/admin/reset_status", methods=["POST"])
+def reset_status():
+    """Reset everyone's status for TODAY to PENDING (useful for demos/testing)."""
     conn = get_db_connection()
-    try:
-        conn.execute("""
-            INSERT INTO medication_logs (patient_id, date, time_taken, status, notes)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(patient_id, date) DO UPDATE SET
-            status=excluded.status,
-            time_taken=excluded.time_taken
-        """, (patient_id, today, time_now, status, "Manual update via Web UI"))
-        conn.commit()
-        return jsonify({"success": True})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        conn.close()
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    # Delete today's logs so they revert to "PENDING" (which is the absence of a log)
+    conn.execute("DELETE FROM medication_logs WHERE date = ?", (today,))
+    conn.commit()
+    conn.close()
+    
+    return redirect(url_for("caregiver_dashboard"))
+
 
 if __name__ == "__main__":
     # Initialize DB if not exists

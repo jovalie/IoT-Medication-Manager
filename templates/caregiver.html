@@ -2,76 +2,34 @@
 
 {% block content %}
 <div class="row">
-    <div class="col-md-12">
+    <div class="col-md-8">
         <h2 class="mb-4">Caregiver Overview <small class="text-muted">({{ today }})</small></h2>
+    </div>
+    <div class="col-md-4 text-end">
+        <form action="/admin/reset_status" method="POST" onsubmit="return confirm('Are you sure you want to reset all statuses for today?');">
+            <button type="submit" class="btn btn-warning">Reset Today's Status</button>
+        </form>
     </div>
 </div>
 
 <div class="row">
     {% for patient in patients %}
-    <div class="col-md-4 mb-4">
-        <div class="card h-100 hover-shadow">
-            <div class="card-body text-center">
-                <a href="/patient/{{ patient.id }}" style="text-decoration: none; color: inherit;">
+    <div class="col-md-4">
+        <a href="/patient/{{ patient.id }}" style="text-decoration: none; color: inherit;">
+            <div class="card h-100 hover-shadow">
+                <div class="card-body text-center">
                     <h5 class="card-title">{{ patient.name }}</h5>
-                </a>
-                <hr>
-                <p class="card-text">Today's Status:</p>
-                <div class="d-flex justify-content-center align-items-center mb-3">
-                    <span class="status-dot status-{{ patient.status }}" style="width: 30px; height: 30px;" id="dot-{{ patient.id }}"></span>
-                    <span class="h4 mb-0 ms-2" id="text-{{ patient.id }}">{{ patient.status }}</span>
-                </div>
-                
-                <!-- Manual Override Controls -->
-                <div class="input-group">
-                    <select class="form-select form-select-sm" id="select-{{ patient.id }}">
-                        <option value="TAKEN" {% if patient.status == 'TAKEN' %}selected{% endif %}>TAKEN</option>
-                        <option value="MISSED" {% if patient.status == 'MISSED' %}selected{% endif %}>MISSED</option>
-                        <option value="PENDING" {% if patient.status == 'PENDING' %}selected{% endif %}>PENDING</option>
-                    </select>
-                    <button class="btn btn-sm btn-outline-primary" onclick="updateStatus({{ patient.id }})">Save</button>
+                    <hr>
+                    <p class="card-text">Today's Status:</p>
+                    <div class="d-flex justify-content-center align-items-center">
+                        <span class="status-dot status-{{ patient.status }}" style="width: 30px; height: 30px;"></span>
+                        <span class="h4 mb-0 ms-2">{{ patient.status }}</span>
+                    </div>
                 </div>
             </div>
-        </div>
+        </a>
     </div>
     {% endfor %}
 </div>
-
-<script>
-async function updateStatus(patientId) {
-    const status = document.getElementById('select-' + patientId).value;
-    
-    try {
-        const response = await fetch('/api/update_status', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                patient_id: patientId,
-                status: status
-            })
-        });
-        
-        const result = await response.json();
-        if (result.success) {
-            // Update UI immediately
-            const dot = document.getElementById('dot-' + patientId);
-            const text = document.getElementById('text-' + patientId);
-            
-            // Remove old classes
-            dot.classList.remove('status-TAKEN', 'status-MISSED', 'status-PENDING');
-            // Add new class
-            dot.classList.add('status-' + status);
-            text.innerText = status;
-            alert('Status updated!');
-        } else {
-            alert('Error updating status: ' + result.error);
-        }
-    } catch (e) {
-        alert('Network error: ' + e);
-    }
-}
-</script>
 {% endblock %}
 
