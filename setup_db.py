@@ -75,21 +75,27 @@ def seed_data(conn):
         print(f"Seeding November data for {name}...")
         for day in range(1, num_days + 1):
             log_date = f"{year}-{month:02d}-{day:02d}"
-            
+            log_date_obj = datetime.strptime(log_date, "%Y-%m-%d").date()
+            today_date = datetime.now().date()
+
             # Create more varied statuses
             if (pid + day) % 5 == 0:
                 status = "MISSED"
             elif (pid + day) % 13 == 0:
-                status = "PENDING"
+                status = "PENDING"  # Tentative pending
             else:
                 status = "TAKEN"
 
-            # Don't create future pending logs
-            if datetime.strptime(log_date, "%Y-%m-%d").date() > datetime.now().date():
+            # Rule 1: Don't log for future dates
+            if log_date_obj > today_date:
                 continue
 
-            # If today is in November, ensure today's status is PENDING
-            if datetime.strptime(log_date, "%Y-%m-%d").date() == datetime.now().date():
+            # Rule 2: If date is in the past and status was pending, it's now missed.
+            if log_date_obj < today_date and status == "PENDING":
+                status = "MISSED"
+
+            # Rule 3: If date is today, it must be pending for the demo.
+            if log_date_obj == today_date:
                 status = "PENDING"
 
             time_taken = None
