@@ -2,8 +2,6 @@ import os
 import sys
 import time
 import wave
-import pyaudio
-import audioop
 import json
 import sqlite3
 from datetime import datetime
@@ -15,17 +13,30 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "interfaces"))
 
 # --- Argument Parser for Test Mode ---
 parser = argparse.ArgumentParser(description="Medication Manager Voice Assistant")
-parser.add_argument('--no-pi', action='store_true', help="Run in local test mode without Pi hardware (mic, LEDs).")
+parser.add_argument(
+    "--no-pi",
+    action="store_true",
+    help="Run in local test mode without Pi hardware (mic, LEDs).",
+)
 args = parser.parse_args()
 
 # --- Conditional Hardware Imports & Mocks ---
 if args.no_pi:
     print("--- RUNNING IN LOCAL TEST MODE (--no-pi) ---")
+
     class MockPixels:
-        def listen(self): print("\n[LED: LISTENING]")
-        def think(self): print("[LED: THINKING]")
-        def speak(self): print("[LED: SPEAKING]")
-        def off(self): print("[LED: OFF]")
+        def listen(self):
+            print("\n[LED: LISTENING]")
+
+        def think(self):
+            print("[LED: THINKING]")
+
+        def speak(self):
+            print("[LED: SPEAKING]")
+
+        def off(self):
+            print("[LED: OFF]")
+
     pixels = MockPixels()
 else:
     try:
@@ -61,21 +72,25 @@ SILENCE_THRESHOLD = 500
 SILENCE_DURATION = 2.0
 MAX_RECORD_SECONDS = 10
 
+
 # --- Database Setup (Merged) ---
 def setup_database():
     print("--- Running Database Setup ---")
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     # Create tables
-    c.execute("""
+    c.execute(
+        """
         CREATE TABLE IF NOT EXISTS patients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             medicine TEXT,
             time_due TEXT
         )
-    """)
-    c.execute("""
+    """
+    )
+    c.execute(
+        """
         CREATE TABLE IF NOT EXISTS medication_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             patient_id INTEGER NOT NULL,
@@ -86,9 +101,10 @@ def setup_database():
             FOREIGN KEY (patient_id) REFERENCES patients (id),
             UNIQUE(patient_id, date)
         )
-    """)
+    """
+    )
     print("Tables created.")
-    
+
     # Check if we already have patients
     c.execute("SELECT count(*) FROM patients")
     if c.fetchone()[0] > 0:
@@ -103,40 +119,49 @@ def setup_database():
         ("Grandpa Hamad", "Vitamin C", "10:00"),
         ("Auntie Joan", "Lipitor", "20:00"),
     ]
-    c.executemany("INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients)
-    
+    c.executemany(
+        "INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients
+    )
+
     c.execute("SELECT id, name FROM patients")
     patient_list = c.fetchall()
-    
+
     year = 2025
     month = 11
     num_days = 30
-    
+
     for pid, name in patient_list:
         for day in range(1, num_days + 1):
             log_date = f"{year}-{month:02d}-{day:02d}"
             log_date_obj = datetime.strptime(log_date, "%Y-%m-%d").date()
             today_date = datetime.now().date()
 
-            if log_date_obj > today_date: continue
+            if log_date_obj > today_date:
+                continue
 
-            if (pid + day) % 5 == 0: status = "MISSED"
-            elif (pid + day) % 13 == 0: status = "PENDING"
-            else: status = "TAKEN"
+            if (pid + day) % 5 == 0:
+                status = "MISSED"
+            elif (pid + day) % 13 == 0:
+                status = "PENDING"
+            else:
+                status = "TAKEN"
 
-            if log_date_obj < today_date and status == "PENDING": status = "MISSED"
-            if log_date_obj == today_date: status = "PENDING"
+            if log_date_obj < today_date and status == "PENDING":
+                status = "MISSED"
+            if log_date_obj == today_date:
+                status = "PENDING"
 
             time_taken = "09:00:00" if status == "TAKEN" else None
-            
+
             c.execute(
                 "INSERT OR IGNORE INTO medication_logs (patient_id, date, time_taken, status, notes) VALUES (?, ?, ?, ?, ?)",
-                (pid, log_date, time_taken, status, "Seeded data")
+                (pid, log_date, time_taken, status, "Seeded data"),
             )
-            
+
     conn.commit()
     conn.close()
     print("--- Database Setup Complete ---")
+
 
 # --- Main Application Logic ---
 # Run setup immediately
@@ -250,7 +275,7 @@ def record_audio():
         text_input = input("🎤 YOU (type response): ")
         pixels.off()
         return text_input  # In test mode, we return the text directly
-    
+
     print(f"* Recording until {SILENCE_DURATION} seconds of silence...")
     pixels.listen()
 
@@ -310,8 +335,8 @@ def record_audio():
 def speech_to_text(audio_or_text):
     if args.no_pi:
         print(f"You said: {audio_or_text}")
-        return audio_or_text # Passthrough in test mode
-        
+        return audio_or_text  # Passthrough in test mode
+
     print("* Sending to Google Speech-to-Text...")
     pixels.think()
     client = speech.SpeechClient()
@@ -341,8 +366,8 @@ def speech_to_text(audio_or_text):
 def text_to_speech(text):
     if args.no_pi:
         print(f"🔊 ASSISTANT (would say): {text}")
-        return True # Simulate success
-        
+        return True  # Simulate success
+
     print(f"* Synthesizing speech: '{text}'")
     pixels.think()
     client = texttospeech.TextToSpeechClient()
