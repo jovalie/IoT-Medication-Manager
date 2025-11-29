@@ -16,27 +16,20 @@
 <div class="row mt-4">
     {% for patient in patients %}
     <div class="col-md-4">
-        <div class="card h-100">
-            <div class="card-header bg-light">
-                <h5 class="card-title mb-0 text-center">{{ patient.name }}</h5>
+        <a href="/patient/{{ patient.id }}" style="text-decoration: none; color: inherit;">
+            <div class="card h-100 hover-shadow">
+                <div class="card-body text-center">
+                    <h5 class="card-title">{{ patient.name }}</h5>
+                    <p class="text-muted">{{ patient.medicine }} @ {{ patient.time_due }}</p>
+                    <hr>
+                    <p class="card-text">Today's Status:</p>
+                    <div class="d-flex justify-content-center align-items-center">
+                        <span class="status-dot status-{{ patient.status }}" style="width: 30px; height: 30px;"></span>
+                        <span class="h4 mb-0 ms-2">{{ patient.status }}</span>
+                    </div>
+                </div>
             </div>
-            <div class="card-body">
-                <ul class="list-group list-group-flush">
-                    {% for med in patient.medications %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <span>
-                            <strong>{{ med.name }}</strong><br>
-                            <small class="text-muted">Due at {{ med.time }}</small>
-                        </span>
-                        <span class="badge status-{{ med.status }} rounded-pill p-2">{{ med.status }}</span>
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-            <div class="card-footer text-center">
-                <a href="/patient/{{ patient.id }}" class="btn btn-sm btn-outline-primary">View Calendar</a>
-            </div>
-        </div>
+        </a>
     </div>
     {% endfor %}
 </div>

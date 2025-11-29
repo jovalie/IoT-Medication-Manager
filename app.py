@@ -28,36 +28,23 @@ def caregiver_dashboard():
 
     patient_data = []
     for p in patients:
-        # Get all medications and their status for today
-        medications = conn.execute("""
-            SELECT
-                m.id,
-                m.medicine_name,
-                m.time_due,
-                ml.status
-            FROM medications m
-            LEFT JOIN medication_logs ml ON m.id = ml.medication_id AND ml.date = ?
-            WHERE m.patient_id = ?
-            ORDER BY m.time_due
-        """, (today, p['id'])).fetchall()
+        # Get today's log
+        log = conn.execute(
+            "SELECT * FROM medication_logs WHERE patient_id = ? AND date = ?",
+            (p["id"], today),
+        ).fetchone()
 
-        med_list = []
-        for med in medications:
-            med_list.append({
-                "name": med['medicine_name'],
-                "time": med['time_due'],
-                "status": med['status'] if med['status'] else 'PENDING'
-            })
-
+        status = log["status"] if log else "PENDING"
         patient_data.append({
-            "id": p['id'],
-            "name": p['name'],
-
-            "medications": med_list
+            "id": p["id"],
+            "name": p["name"],
+            "status": status,
+            "medicine": p["medicine"],
+            "time_due": p["time_due"]
         })
 
     conn.close()
-    return render_template('caregiver.html', patients=patient_data, today=today)
+    return render_template("caregiver.html", patients=patient_data, today=today)
 
 
 @app.route("/patient/<int:patient_id>")
@@ -79,16 +66,9 @@ def patient_calendar(patient_id):
 def get_patient_logs(patient_id):
     """API to get logs for the calendar."""
     conn = get_db_connection()
-    logs = conn.execute("""
-        SELECT
-            ml.status,
-            ml.date,
-            ml.notes,
-            m.medicine_name
-        FROM medication_logs ml
-        JOIN medications m ON ml.medication_id = m.id
-        WHERE m.patient_id = ?
-    """, (patient_id,)).fetchall()
+    logs = conn.execute(
+        "SELECT * FROM medication_logs WHERE patient_id = ?", (patient_id,)
+    ).fetchall()
     conn.close()
 
     events = []
@@ -129,11 +109,9 @@ def get_all_logs():
             ml.status,
             ml.date,
             ml.notes,
-            p.name as patient_name,
-            m.medicine_name
+            p.name as patient_name
         FROM medication_logs ml
-        JOIN medications m ON ml.medication_id = m.id
-        JOIN patients p ON m.patient_id = p.id
+        JOIN patients p ON ml.patient_id = p.id
     """).fetchall()
     conn.close()
 
@@ -148,7 +126,7 @@ def get_all_logs():
             color = "#ffc107" # Orange
 
         events.append({
-            "title": f"{log['patient_name']} - {log['medicine_name']}: {log['status']}",
+            "title": f"{log['patient_name']}: {log['status']}",
             "start": log['date'],
             "color": color,
             "allDay": True,
