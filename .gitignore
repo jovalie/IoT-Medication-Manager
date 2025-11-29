@@ -139,3 +139,9 @@ cython_debug/
 
 google_credentials.json
 .env
+
+# Ignore all JSON files that might contain credentials
+*.json
+
+# but DO NOT ignore json files in the templates folder
+!templates/**/*.json

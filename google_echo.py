@@ -44,9 +44,9 @@ from google.cloud import texttospeech
 import vertexai
 from vertexai.generative_models import GenerativeModel
 
-# Configuration
-CREDENTIALS_FILE = "google_credentials.json"
+# --- Constants ---
 DB_NAME = "medication_manager.db"
+CREDENTIALS_FILE = "google_credentials.json"
 RESPEAKER_RATE = 16000
 RESPEAKER_CHANNELS = 2
 RESPEAKER_WIDTH = 2
@@ -61,8 +61,88 @@ SILENCE_THRESHOLD = 500
 SILENCE_DURATION = 2.0
 MAX_RECORD_SECONDS = 10
 
+# --- Database Setup (Merged) ---
+def setup_database():
+    print("--- Running Database Setup ---")
+    conn = sqlite3.connect(DB_NAME)
+    c = conn.cursor()
+    # Create tables
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS patients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            medicine TEXT,
+            time_due TEXT
+        )
+    """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS medication_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            patient_id INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            time_taken TEXT,
+            status TEXT NOT NULL CHECK(status IN ('TAKEN', 'MISSED', 'PENDING')),
+            notes TEXT,
+            FOREIGN KEY (patient_id) REFERENCES patients (id),
+            UNIQUE(patient_id, date)
+        )
+    """)
+    print("Tables created.")
+    
+    # Check if we already have patients
+    c.execute("SELECT count(*) FROM patients")
+    if c.fetchone()[0] > 0:
+        print("Data already exists, skipping seed.")
+        conn.close()
+        return
 
-# Database Helper
+    # Seed data
+    print("Seeding initial data...")
+    patients = [
+        ("Grandpa Albert", "Aspirin", "09:00"),
+        ("Grandpa Hamad", "Vitamin C", "10:00"),
+        ("Auntie Joan", "Lipitor", "20:00"),
+    ]
+    c.executemany("INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients)
+    
+    c.execute("SELECT id, name FROM patients")
+    patient_list = c.fetchall()
+    
+    year = 2025
+    month = 11
+    num_days = 30
+    
+    for pid, name in patient_list:
+        for day in range(1, num_days + 1):
+            log_date = f"{year}-{month:02d}-{day:02d}"
+            log_date_obj = datetime.strptime(log_date, "%Y-%m-%d").date()
+            today_date = datetime.now().date()
+
+            if log_date_obj > today_date: continue
+
+            if (pid + day) % 5 == 0: status = "MISSED"
+            elif (pid + day) % 13 == 0: status = "PENDING"
+            else: status = "TAKEN"
+
+            if log_date_obj < today_date and status == "PENDING": status = "MISSED"
+            if log_date_obj == today_date: status = "PENDING"
+
+            time_taken = "09:00:00" if status == "TAKEN" else None
+            
+            c.execute(
+                "INSERT OR IGNORE INTO medication_logs (patient_id, date, time_taken, status, notes) VALUES (?, ?, ?, ?, ?)",
+                (pid, log_date, time_taken, status, "Seeded data")
+            )
+            
+    conn.commit()
+    conn.close()
+    print("--- Database Setup Complete ---")
+
+# --- Main Application Logic ---
+# Run setup immediately
+setup_database()
+
+
 def get_db_connection():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
