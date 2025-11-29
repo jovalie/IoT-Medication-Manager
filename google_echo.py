@@ -8,11 +8,6 @@ import json
 import sqlite3
 from datetime import datetime
 import random
-from dotenv import load_dotenv
-from twilio.rest import Client
-
-# Load environment variables
-load_dotenv()
 
 # Add interfaces path
 sys.path.append(os.path.join(os.path.dirname(__file__), "interfaces"))
@@ -44,12 +39,6 @@ GEMINI_MODEL_NAME = "gemini-2.5-flash"
 SILENCE_THRESHOLD = 500
 SILENCE_DURATION = 2.0
 MAX_RECORD_SECONDS = 10
-
-# Twilio Configuration
-TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
-TWILIO_WHATSAPP_NUMBER = os.getenv("TWILIO_WHATSAPP_NUMBER")
-CAREGIVER_PHONE_NUMBER = os.getenv("CAREGIVER_PHONE_NUMBER")
 
 
 # Database Helper
@@ -111,26 +100,6 @@ def log_medication(patient_name, status, notes=None):
     except Exception as e:
         print(f"DB Error: {e}")
         return False, str(e)
-
-
-def send_whatsapp_alert(message):
-    """Sends a WhatsApp message to the caregiver using Twilio."""
-    if not all([TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_WHATSAPP_NUMBER, CAREGIVER_PHONE_NUMBER]):
-        print("Error: Twilio credentials not set in .env file.")
-        return False
-
-    try:
-        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-        message = client.messages.create(
-            body=message,
-            from_=TWILIO_WHATSAPP_NUMBER,
-            to=CAREGIVER_PHONE_NUMBER
-        )
-        print(f"WhatsApp Alert Sent! SID: {message.sid}")
-        return True
-    except Exception as e:
-        print(f"Twilio Error: {e}")
-        return False
 
 
 # Check credentials
@@ -343,7 +312,7 @@ def process_intent(text):
         }
 
 
-def run_reminder_flow(patient_name="Grandpa Joe"):
+def run_reminder_flow(patient_name="Grandpa Albert"):
     print(f"\n--- Starting Reminder Flow for {patient_name} ---")
 
     reminders_count = 0
@@ -386,10 +355,6 @@ def run_reminder_flow(patient_name="Grandpa Joe"):
                     f"Alerting caregiver that {patient_name} has not taken medication."
                 )
                 play_audio(OUTPUT_FILENAME)
-                
-                alert_msg = f"ALERT: {patient_name} missed their scheduled medication at {datetime.now().strftime('%H:%M')}."
-                send_whatsapp_alert(alert_msg)
-                
                 log_medication(patient_name, "MISSED")
                 return
 
@@ -468,17 +433,13 @@ def run_reminder_flow(patient_name="Grandpa Joe"):
     print("* Max reminders reached. Sending Alert...")
     text_to_speech("Max reminders reached. Sending WhatsApp alert.")
     play_audio(OUTPUT_FILENAME)
-    
-    alert_msg = f"ALERT: {patient_name} missed medication after 4 reminders."
-    send_whatsapp_alert(alert_msg)
-    
     log_medication(patient_name, "MISSED")
 
 
 def main():
     try:
-        # For testing, jump straight into the flow for Grandpa Joe
-        run_reminder_flow("Grandpa Joe")
+        # For testing, jump straight into the flow for Grandpa Albert
+        run_reminder_flow("Grandpa Albert")
 
     except KeyboardInterrupt:
         print("\nExiting...")

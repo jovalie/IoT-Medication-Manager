@@ -56,9 +56,9 @@ def seed_data(conn):
 
     # Insert Patients
     patients = [
-        ("Grandpa Joe", "Aspirin", "09:00"), 
-        ("Grandma Sarah", "Vitamin C", "10:00"), 
-        ("Uncle Bob", "Lipitor", "20:00")
+        ("Grandpa Albert", "Aspirin", "09:00"),
+        ("Grandpa Hamad", "Vitamin C", "10:00"),
+        ("Auntie Joan", "Lipitor", "20:00"),
     ]
     c.executemany("INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients)
     
