@@ -35,13 +35,15 @@ def caregiver_dashboard():
         ).fetchone()
 
         status = log["status"] if log else "PENDING"
-        patient_data.append({
-            "id": p["id"],
-            "name": p["name"],
-            "status": status,
-            "medicine": p["medicine"],
-            "time_due": p["time_due"]
-        })
+        patient_data.append(
+            {
+                "id": p["id"],
+                "name": p["name"],
+                "status": status,
+                "medicine": p["medicine"],
+                "time_due": p["time_due"],
+            }
+        )
 
     conn.close()
     return render_template("caregiver.html", patients=patient_data, today=today)
@@ -105,16 +107,16 @@ def get_all_logs():
     """API to get all logs for the combined calendar."""
     conn = get_db_connection()
     logs = conn.execute("""
-        SELECT
-            ml.status,
-            ml.date,
-            ml.notes,
-            p.name as patient_name
+        SELECT 
+            ml.status, 
+            ml.date, 
+            ml.notes, 
+            p.name as patient_name 
         FROM medication_logs ml
         JOIN patients p ON ml.patient_id = p.id
     """).fetchall()
     conn.close()
-
+    
     events = []
     for log in logs:
         color = "#gray"
@@ -124,7 +126,7 @@ def get_all_logs():
             color = "#dc3545" # Red
         elif log['status'] == 'PENDING':
             color = "#ffc107" # Orange
-
+            
         events.append({
             "title": f"{log['patient_name']}: {log['status']}",
             "start": log['date'],
@@ -132,7 +134,7 @@ def get_all_logs():
             "allDay": True,
             "description": log['notes'] or ""
         })
-
+        
     return jsonify(events)
 
 
