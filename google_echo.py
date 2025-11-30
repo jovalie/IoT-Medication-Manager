@@ -12,7 +12,7 @@ import audioop
 import requests
 from dotenv import load_dotenv
 
-load_dotenv() # Load variables from .env file
+load_dotenv()  # Load variables from .env file
 
 # Add interfaces path
 sys.path.append(os.path.join(os.path.dirname(__file__), "interfaces"))
@@ -505,15 +505,14 @@ def send_whatsapp_alert(patient_name):
         "to": caregiver_number,
         "type": "template",
         "template": {
-            "name": "medication_alert",
+            "name": "hello_world",
             "language": {"code": "en_US"},
-            "components": [{"type": "body", "parameters": [{"type": "text", "text": patient_name}]}],
         },
     }
 
     try:
         response = requests.post(url, headers=headers, json=payload)
-        response.raise_for_status() # Raise an exception for bad status codes
+        response.raise_for_status()  # Raise an exception for bad status codes
         print(f"✅ WhatsApp Alert Sent Successfully for {patient_name}!")
     except requests.exceptions.RequestException as e:
         print(f"!!! WHATSAPP_ERROR: Failed to send alert for {patient_name}.")
@@ -525,7 +524,7 @@ def run_reminder_flow(patient_name, medicine, time_due):
     print(f"\n--- Starting Reminder Flow for {patient_name} ---")
 
     reminders_count = 0
-    max_reminders = 4
+    max_reminders = 1
 
     # 1. Play Reminder 1 with medication details
     text_to_speech(f"Hello {patient_name}. It's {time_due}, time for your {medicine}.")
@@ -560,7 +559,7 @@ def run_reminder_flow(patient_name, medicine, time_due):
             else:
                 # No -> Send Alert -> End
                 print("* Sending WhatsApp Alert...")
-                send_whatsapp_alert(patient_name) # Call the function here
+                send_whatsapp_alert(patient_name)  # Call the function here
                 text_to_speech(
                     f"Alerting caregiver that {patient_name} has not taken medication."
                 )
@@ -641,7 +640,7 @@ def run_reminder_flow(patient_name, medicine, time_due):
 
     # If loop finishes (max reminders reached)
     print("* Max reminders reached. Sending Alert...")
-    send_whatsapp_alert(patient_name) # And also call it here
+    send_whatsapp_alert(patient_name)  # And also call it here
     text_to_speech("Max reminders reached. Sending WhatsApp alert.")
     play_audio(OUTPUT_FILENAME)
     log_medication(patient_name, "MISSED")
