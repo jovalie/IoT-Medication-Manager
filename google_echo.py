@@ -11,6 +11,7 @@ import pyaudio
 import audioop
 import requests
 from dotenv import load_dotenv
+import urllib.parse
 
 load_dotenv()  # Load variables from .env file
 
@@ -484,38 +485,28 @@ def process_intent(text):
 
 
 def send_whatsapp_alert(patient_name):
-    """Send a WhatsApp notification to the caregiver."""
-    token = os.getenv("WHATSAPP_API_TOKEN")
-    phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+    """Send a WhatsApp notification to the caregiver using CallMeBot."""
+    api_key = os.getenv("CALLMEBOT_API_KEY")
     caregiver_number = os.getenv("CAREGIVER_PHONE_NUMBER")
 
-    if not all([token, phone_number_id, caregiver_number]):
-        print("!!! WHATSAPP_ERROR: Missing one or more environment variables.")
+    if not all([api_key, caregiver_number]):
+        print("!!! CALLMEBOT_ERROR: Missing CALLMEBOT_API_KEY or CAREGIVER_PHONE_NUMBER in .env file.")
         return
 
-    url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
-    # IMPORTANT: 'medication_alert' is a pre-approved message template in Meta Business Manager.
-    # It must contain one variable parameter like: "Alert: {{1}} has missed their medication."
-    payload = {
-        "messaging_product": "whatsapp",
-        "to": caregiver_number,
-        "type": "template",
-        "template": {
-            "name": "hello_world",
-            "language": {"code": "en_US"},
-        },
-    }
+    # URL-encode the message text
+    message_text = f"Alert: {patient_name} has missed their medication. Please check on them."
+    encoded_text = urllib.parse.quote_plus(message_text)
+
+    url = f"https://api.callmebot.com/whatsapp.php?phone={caregiver_number}&text={encoded_text}&apikey={api_key}"
 
     try:
-        response = requests.post(url, headers=headers, json=payload)
-        response.raise_for_status()  # Raise an exception for bad status codes
-        print(f"✅ WhatsApp Alert Sent Successfully for {patient_name}!")
+        print(f"✅ Sending CallMeBot Alert for {patient_name}...")
+        response = requests.get(url)
+        response.raise_for_status() # Raise an exception for bad status codes
+        print(f"    CallMeBot alert sent successfully!")
+        # The API returns "Message queued" on success, but we don't need to parse it.
     except requests.exceptions.RequestException as e:
-        print(f"!!! WHATSAPP_ERROR: Failed to send alert for {patient_name}.")
+        print(f"!!! CALLMEBOT_ERROR: Failed to send alert for {patient_name}.")
         print(f"    Error: {e}")
         print(f"    Response: {response.text if 'response' in locals() else 'N/A'}")
 
