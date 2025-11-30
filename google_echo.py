@@ -25,6 +25,7 @@ args = parser.parse_args()
 # --- Conditional Hardware Imports & Mocks ---
 if args.no_pi:
     print("--- RUNNING IN AUDIO-ENABLED LOCAL TEST MODE (--no-pi) ---")
+
     # Mock only the Pi-specific LED hardware
     class MockPixels:
         def listen(self):
@@ -58,9 +59,9 @@ from vertexai.generative_models import GenerativeModel
 DB_NAME = "medication_manager.db"
 CREDENTIALS_FILE = "google_credentials.json"
 RESPEAKER_RATE = 16000
-RESPEAKER_CHANNELS = 1 # Use 1 channel for local mic
+RESPEAKER_CHANNELS = 1  # Use 1 channel for local mic
 RESPEAKER_WIDTH = 2
-RESPEAKER_INDEX = -1 # For local testing, find a generic input device
+RESPEAKER_INDEX = -1  # For local testing, find a generic input device
 CHUNK = 1024
 INPUT_FILENAME = "input_request.wav"
 OUTPUT_FILENAME = "output_response.wav"
@@ -76,11 +77,15 @@ if args.no_pi:
     p = pyaudio.PyAudio()
     # A more robust way to find an input device
     info = p.get_host_api_info_by_index(0)
-    numdevices = info.get('deviceCount')
+    numdevices = info.get("deviceCount")
     RESPEAKER_INDEX = -1
     for i in range(0, numdevices):
-        if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
-            print(f"Found audio input device at index {i}: {p.get_device_info_by_host_api_device_index(0, i).get('name')}")
+        if (
+            p.get_device_info_by_host_api_device_index(0, i).get("maxInputChannels")
+        ) > 0:
+            print(
+                f"Found audio input device at index {i}: {p.get_device_info_by_host_api_device_index(0, i).get('name')}"
+            )
             RESPEAKER_INDEX = i
             break
     if RESPEAKER_INDEX == -1:
@@ -133,9 +138,9 @@ def setup_database():
     # Seed data
     print("Seeding initial data...")
     patients = [
-        ("Grandpa Albert", "Aspirin", "09:00"),
-        ("Grandpa Hamad", "Vitamin C", "10:00"),
-        ("Auntie Joan", "Lipitor", "20:00"),
+        ("Grandpa Albert", "Adderall", "08:00"),      # Student Persona
+        ("Grandpa Hamad", "Lisinopril", "20:00"),       # Senior Care Persona
+        ("Auntie Joan", "Fish Oil", "12:00"),        # Athlete Persona
     ]
     c.executemany(
         "INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients
