@@ -1,5 +1,5 @@
-import os
 import sys
+import os
 import time
 import wave
 import json
@@ -7,6 +7,8 @@ import sqlite3
 from datetime import datetime
 import random
 import argparse
+import pyaudio
+import audioop
 
 # Add interfaces path
 sys.path.append(os.path.join(os.path.dirname(__file__), "interfaces"))
@@ -16,14 +18,14 @@ parser = argparse.ArgumentParser(description="Medication Manager Voice Assistant
 parser.add_argument(
     "--no-pi",
     action="store_true",
-    help="Run in local test mode without Pi hardware (mic, LEDs).",
+    help="Run in local test mode without Pi-specific hardware (LEDs).",
 )
 args = parser.parse_args()
 
 # --- Conditional Hardware Imports & Mocks ---
 if args.no_pi:
-    print("--- RUNNING IN LOCAL TEST MODE (--no-pi) ---")
-
+    print("--- RUNNING IN AUDIO-ENABLED LOCAL TEST MODE (--no-pi) ---")
+    # Mock only the Pi-specific LED hardware
     class MockPixels:
         def listen(self):
             print("\n[LED: LISTENING]")
@@ -42,11 +44,8 @@ else:
     try:
         sys.path.append(os.path.join(os.path.dirname(__file__), "interfaces"))
         from pixels import pixels
-        import pyaudio
-        import audioop
     except ImportError as e:
-        print(f"FATAL: Hardware library import failed: {e}")
-        print("For local testing, run with the --no-pi flag.")
+        print(f"FATAL: Raspberry Pi hardware library import failed: {e}")
         sys.exit(1)
 
 
@@ -59,9 +58,9 @@ from vertexai.generative_models import GenerativeModel
 DB_NAME = "medication_manager.db"
 CREDENTIALS_FILE = "google_credentials.json"
 RESPEAKER_RATE = 16000
-RESPEAKER_CHANNELS = 2
+RESPEAKER_CHANNELS = 1 # Use 1 channel for local mic
 RESPEAKER_WIDTH = 2
-RESPEAKER_INDEX = 2  # Adjust if needed
+RESPEAKER_INDEX = -1 # For local testing, find a generic input device
 CHUNK = 1024
 INPUT_FILENAME = "input_request.wav"
 OUTPUT_FILENAME = "output_response.wav"
@@ -71,6 +70,25 @@ GEMINI_MODEL_NAME = "gemini-2.5-flash"
 SILENCE_THRESHOLD = 500
 SILENCE_DURATION = 2.0
 MAX_RECORD_SECONDS = 10
+
+# For local testing, find a generic input device
+if args.no_pi:
+    p = pyaudio.PyAudio()
+    # A more robust way to find an input device
+    info = p.get_host_api_info_by_index(0)
+    numdevices = info.get('deviceCount')
+    RESPEAKER_INDEX = -1
+    for i in range(0, numdevices):
+        if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
+            print(f"Found audio input device at index {i}: {p.get_device_info_by_host_api_device_index(0, i).get('name')}")
+            RESPEAKER_INDEX = i
+            break
+    if RESPEAKER_INDEX == -1:
+        print("FATAL: No audio input device found.")
+        sys.exit(1)
+    p.terminate()
+else:
+    RESPEAKER_INDEX = 2  # Pi-specific index
 
 
 # --- Database Setup (Merged) ---
