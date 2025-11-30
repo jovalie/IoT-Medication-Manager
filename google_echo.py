@@ -9,6 +9,10 @@ import random
 import argparse
 import pyaudio
 import audioop
+import requests
+from dotenv import load_dotenv
+
+load_dotenv() # Load variables from .env file
 
 # Add interfaces path
 sys.path.append(os.path.join(os.path.dirname(__file__), "interfaces"))
@@ -479,6 +483,44 @@ def process_intent(text):
         }
 
 
+def send_whatsapp_alert(patient_name):
+    """Send a WhatsApp notification to the caregiver."""
+    token = os.getenv("WHATSAPP_API_TOKEN")
+    phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+    caregiver_number = os.getenv("CAREGIVER_PHONE_NUMBER")
+
+    if not all([token, phone_number_id, caregiver_number]):
+        print("!!! WHATSAPP_ERROR: Missing one or more environment variables.")
+        return
+
+    url = f"https://graph.facebook.com/v20.0/{phone_number_id}/messages"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
+    # IMPORTANT: 'medication_alert' is a pre-approved message template in Meta Business Manager.
+    # It must contain one variable parameter like: "Alert: {{1}} has missed their medication."
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": caregiver_number,
+        "type": "template",
+        "template": {
+            "name": "medication_alert",
+            "language": {"code": "en_US"},
+            "components": [{"type": "body", "parameters": [{"type": "text", "text": patient_name}]}],
+        },
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=payload)
+        response.raise_for_status() # Raise an exception for bad status codes
+        print(f"✅ WhatsApp Alert Sent Successfully for {patient_name}!")
+    except requests.exceptions.RequestException as e:
+        print(f"!!! WHATSAPP_ERROR: Failed to send alert for {patient_name}.")
+        print(f"    Error: {e}")
+        print(f"    Response: {response.text if 'response' in locals() else 'N/A'}")
+
+
 def run_reminder_flow(patient_name, medicine, time_due):
     print(f"\n--- Starting Reminder Flow for {patient_name} ---")
 
@@ -518,6 +560,7 @@ def run_reminder_flow(patient_name, medicine, time_due):
             else:
                 # No -> Send Alert -> End
                 print("* Sending WhatsApp Alert...")
+                send_whatsapp_alert(patient_name) # Call the function here
                 text_to_speech(
                     f"Alerting caregiver that {patient_name} has not taken medication."
                 )
@@ -598,6 +641,7 @@ def run_reminder_flow(patient_name, medicine, time_due):
 
     # If loop finishes (max reminders reached)
     print("* Max reminders reached. Sending Alert...")
+    send_whatsapp_alert(patient_name) # And also call it here
     text_to_speech("Max reminders reached. Sending WhatsApp alert.")
     play_audio(OUTPUT_FILENAME)
     log_medication(patient_name, "MISSED")

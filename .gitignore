@@ -145,3 +145,6 @@ google_credentials.json
 
 # but DO NOT ignore json files in the templates folder
 !templates/**/*.json
+
+# Environment variables
+.env
