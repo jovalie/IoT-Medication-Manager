@@ -490,19 +490,24 @@ def send_whatsapp_alert(patient_name):
     caregiver_number = os.getenv("CAREGIVER_PHONE_NUMBER")
 
     if not all([api_key, caregiver_number]):
-        print("!!! CALLMEBOT_ERROR: Missing CALLMEBOT_API_KEY or CAREGIVER_PHONE_NUMBER in .env file.")
+        print(
+            "!!! CALLMEBOT_ERROR: Missing CALLMEBOT_API_KEY or CAREGIVER_PHONE_NUMBER in .env file."
+        )
         return
 
     # URL-encode the message text
-    message_text = f"Alert: {patient_name} has missed their medication. Please check on them."
+    message_text = (
+        f"Alert: {patient_name} has missed their medication. Please check on them."
+    )
     encoded_text = urllib.parse.quote_plus(message_text)
 
     url = f"https://api.callmebot.com/whatsapp.php?phone={caregiver_number}&text={encoded_text}&apikey={api_key}"
 
     try:
         print(f"✅ Sending CallMeBot Alert for {patient_name}...")
+        print(f"    CALLING URL: {url}")  # Add this line for debugging
         response = requests.get(url)
-        response.raise_for_status() # Raise an exception for bad status codes
+        response.raise_for_status()  # Raise an exception for bad status codes
         print(f"    CallMeBot alert sent successfully!")
         # The API returns "Message queued" on success, but we don't need to parse it.
     except requests.exceptions.RequestException as e:
