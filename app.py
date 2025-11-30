@@ -49,6 +49,31 @@ def caregiver_dashboard():
     return render_template("caregiver.html", patients=patient_data, today=today)
 
 
+@app.route("/patient/new")
+def new_patient_form():
+    """Display a form to add a new patient."""
+    return render_template("new_patient.html")
+
+
+@app.route("/patient/create", methods=["POST"])
+def create_patient():
+    """Handle the new patient form submission."""
+    name = request.form["name"]
+    medicine = request.form["medicine"]
+    time_due = request.form["time_due"]
+
+    if name and medicine and time_due:
+        conn = get_db_connection()
+        conn.execute(
+            "INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)",
+            (name, medicine, time_due),
+        )
+        conn.commit()
+        conn.close()
+
+    return redirect(url_for("caregiver_dashboard"))
+
+
 @app.route("/patient/<int:patient_id>")
 def patient_calendar(patient_id):
     """Calendar view for a specific patient."""

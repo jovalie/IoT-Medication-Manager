@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-12">
+        <a href="/" class="btn btn-outline-secondary">&larr; Back to Dashboard</a>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-white">
+                <h3 class="card-title mb-0">Add New Patient</h3>
+            </div>
+            <div class="card-body">
+                <form action="/patient/create" method="POST">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Patient Name</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="medicine" class="form-label">Medication</label>
+                        <input type="text" class="form-control" id="medicine" name="medicine" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="time_due" class="form-label">Time Due</label>
+                        <input type="time" class="form-control" id="time_due" name="time_due" required>
+                    </div>
+                    <button type="submit" class="btn btn-success">Save Patient</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
