@@ -138,9 +138,9 @@ def setup_database():
     # Seed data
     print("Seeding initial data...")
     patients = [
-        ("Grandpa Albert", "Adderall", "08:00"),      # Student Persona
-        ("Grandpa Hamad", "Lisinopril", "20:00"),       # Senior Care Persona
-        ("Auntie Joan", "Fish Oil", "12:00"),        # Athlete Persona
+        ("Grandpa Albert", "Omeprazole", "08:00"),  # Student Persona
+        ("Grandpa Hamad", "Lisinopril", "20:00"),  # Senior Care Persona
+        ("Auntie Joan", "Fish Oil", "12:00"),  # Athlete Persona
     ]
     c.executemany(
         "INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients

@@ -6,21 +6,25 @@ import os
 app = Flask(__name__)
 DB_NAME = "medication_manager.db"
 
+
 # --- Database Setup (Merged from setup_db.py) ---
 def setup_database():
     print("--- Running Database Setup for Flask App ---")
     conn = sqlite3.connect(DB_NAME)
     c = conn.cursor()
     # Create tables
-    c.execute("""
+    c.execute(
+        """
         CREATE TABLE IF NOT EXISTS patients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT NOT NULL,
             medicine TEXT,
             time_due TEXT
         )
-    """)
-    c.execute("""
+    """
+    )
+    c.execute(
+        """
         CREATE TABLE IF NOT EXISTS medication_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             patient_id INTEGER NOT NULL,
@@ -31,8 +35,9 @@ def setup_database():
             FOREIGN KEY (patient_id) REFERENCES patients (id),
             UNIQUE(patient_id, date)
         )
-    """)
-    
+    """
+    )
+
     # Check if we already have patients
     c.execute("SELECT count(*) FROM patients")
     if c.fetchone()[0] > 0:
@@ -41,41 +46,49 @@ def setup_database():
 
     # Seed data
     patients = [
-        ("Grandpa Albert", "Adderall", "08:00"),      # Student Persona
-        ("Grandpa Hamad", "Lisinopril", "20:00"),       # Senior Care Persona
-        ("Auntie Joan", "Fish Oil", "12:00"),        # Athlete Persona
+        ("Grandpa Albert", "Omeprazole", "08:00"),  # Student Persona
+        ("Grandpa Hamad", "Lisinopril", "20:00"),  # Senior Care Persona
+        ("Auntie Joan", "Fish Oil", "12:00"),  # Athlete Persona
     ]
-    c.executemany("INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients)
-    
+    c.executemany(
+        "INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients
+    )
+
     c.execute("SELECT id, name FROM patients")
     patient_list = c.fetchall()
-    
+
     year = 2025
     month = 11
     num_days = 30
-    
+
     for pid, name in patient_list:
         for day in range(1, num_days + 1):
             log_date = f"{year}-{month:02d}-{day:02d}"
             log_date_obj = datetime.strptime(log_date, "%Y-%m-%d").date()
             today_date = datetime.now().date()
 
-            if log_date_obj > today_date: continue
+            if log_date_obj > today_date:
+                continue
 
-            if (pid + day) % 5 == 0: status = "MISSED"
-            elif (pid + day) % 13 == 0: status = "PENDING"
-            else: status = "TAKEN"
+            if (pid + day) % 5 == 0:
+                status = "MISSED"
+            elif (pid + day) % 13 == 0:
+                status = "PENDING"
+            else:
+                status = "TAKEN"
 
-            if log_date_obj < today_date and status == "PENDING": status = "MISSED"
-            if log_date_obj == today_date: status = "PENDING"
+            if log_date_obj < today_date and status == "PENDING":
+                status = "MISSED"
+            if log_date_obj == today_date:
+                status = "PENDING"
 
             time_taken = "09:00:00" if status == "TAKEN" else None
-            
+
             c.execute(
                 "INSERT OR IGNORE INTO medication_logs (patient_id, date, time_taken, status, notes) VALUES (?, ?, ?, ?, ?)",
-                (pid, log_date, time_taken, status, "Seeded data")
+                (pid, log_date, time_taken, status, "Seeded data"),
             )
-            
+
     conn.commit()
     conn.close()
     print("--- Flask DB Setup Complete ---")
@@ -259,5 +272,5 @@ def reset_status():
 if __name__ == "__main__":
     # Initialize DB if not exists
     setup_database()
-        
+
     app.run(host="0.0.0.0", port=8080, debug=True)
