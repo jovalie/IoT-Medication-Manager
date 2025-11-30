@@ -121,17 +121,18 @@ def get_patient_logs(patient_id):
     return jsonify(events)
 
 
-@app.route('/calendar/all')
+@app.route("/calendar/all")
 def all_patients_calendar():
     """Combined calendar view for all patients."""
-    return render_template('calendar_all.html')
+    return render_template("calendar_all.html")
 
 
-@app.route('/api/logs/all')
+@app.route("/api/logs/all")
 def get_all_logs():
     """API to get all logs for the combined calendar."""
     conn = get_db_connection()
-    logs = conn.execute("""
+    logs = conn.execute(
+        """
         SELECT 
             ml.status, 
             ml.date, 
@@ -139,27 +140,30 @@ def get_all_logs():
             p.name as patient_name 
         FROM medication_logs ml
         JOIN patients p ON ml.patient_id = p.id
-    """).fetchall()
+    """
+    ).fetchall()
     conn.close()
-    
+
     events = []
     for log in logs:
         color = "#gray"
-        if log['status'] == 'TAKEN':
-            color = "#28a745" # Green
-        elif log['status'] == 'MISSED':
-            color = "#dc3545" # Red
-        elif log['status'] == 'PENDING':
-            color = "#ffc107" # Orange
-            
-        events.append({
-            "title": f"{log['patient_name']}: {log['status']}",
-            "start": log['date'],
-            "color": color,
-            "allDay": True,
-            "description": log['notes'] or ""
-        })
-        
+        if log["status"] == "TAKEN":
+            color = "#28a745"  # Green
+        elif log["status"] == "MISSED":
+            color = "#dc3545"  # Red
+        elif log["status"] == "PENDING":
+            color = "#ffc107"  # Orange
+
+        events.append(
+            {
+                "title": f"{log['patient_name']}: {log['status']}",
+                "start": log["date"],
+                "color": color,
+                "allDay": True,
+                "description": log["notes"] or "",
+            }
+        )
+
     return jsonify(events)
 
 
@@ -186,4 +190,4 @@ if __name__ == "__main__":
 
         setup_db.main()
 
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=8080, debug=True)
