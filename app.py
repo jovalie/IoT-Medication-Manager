@@ -46,9 +46,9 @@ def setup_database():
 
     # Seed data
     patients = [
-        ("Grandpa Albert", "Omeprazole", "08:00"),  # Student Persona
-        ("Grandpa Hamad", "Lisinopril", "20:00"),  # Senior Care Persona
-        ("Auntie Joan", "Fish Oil", "12:00"),  # Athlete Persona
+        ("Grandpa Albert", "Lisinopril", "08:00"),  # Senior Care Persona
+        ("Student Hamad", "Vitamin B", "10:00"),  # Student Persona
+        ("Athlete Joan", "Iron Supplement", "12:00"),  # Athlete Persona
     ]
     c.executemany(
         "INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients

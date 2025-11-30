@@ -143,9 +143,9 @@ def setup_database():
     # Seed data
     print("Seeding initial data...")
     patients = [
-        ("Grandpa Albert", "Omeprazole", "08:00"),  # Student Persona
-        ("Grandpa Hamad", "Lisinopril", "20:00"),  # Senior Care Persona
-        ("Auntie Joan", "Fish Oil", "12:00"),  # Athlete Persona
+        ("Grandpa Albert", "Lisinopril", "08:00"),  # Senior Care Persona
+        ("Student Hamad", "Vitamin B", "10:00"),  # Student Persona
+        ("Athlete Joan", "Iron Supplement", "12:00"),  # Athlete Persona
     ]
     c.executemany(
         "INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients
@@ -520,7 +520,7 @@ def run_reminder_flow(patient_name, medicine, time_due):
     print(f"\n--- Starting Reminder Flow for {patient_name} ---")
 
     reminders_count = 0
-    max_reminders = 1
+    max_reminders = 3
 
     # 1. Play Reminder 1 with medication details
     text_to_speech(f"Hello {patient_name}. It's {time_due}, time for your {medicine}.")
