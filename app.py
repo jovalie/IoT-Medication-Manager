@@ -17,6 +17,7 @@ from threading import Lock
 from dotenv import load_dotenv
 import urllib.parse
 import atexit
+import webbrowser
 from google.cloud import speech
 from google.cloud import texttospeech
 import vertexai
@@ -838,5 +839,16 @@ if __name__ == "__main__":
     # Run the voice assistant in a background thread
     assistant_thread = threading.Thread(target=start_voice_assistant, daemon=True)
     assistant_thread.start()
+
+    # Open the browser to the caregiver dashboard
+    if not args.no_pi:
+        # On the Pi, we might want to force a specific browser or display, 
+        # but standard open() usually works if a desktop environment is running.
+        # Adding a slight delay to ensure Flask is up.
+        def open_browser():
+            time.sleep(2)
+            webbrowser.open("http://localhost:8080/caregiver")
+
+        threading.Thread(target=open_browser, daemon=True).start()
 
     app.run(host="0.0.0.0", port=8080, debug=True, use_reloader=False)
