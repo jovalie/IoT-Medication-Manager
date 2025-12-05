@@ -456,28 +456,56 @@ def monitor_pillbox():
     while True:
         try:
             if ser.in_waiting > 0:
-                # Read line from Arduino
                 line = ser.readline().decode("utf-8").strip()
 
-                # --- NEW LOGIC FOR YOUR 'OPENEVENT' TAG ---
-                # Arduino sends: "OPENEVENT:Mon"
                 if line.startswith("OPENEVENT:"):
-                    # Split by the colon
                     parts = line.split(":")
-                    # parts[0] is "OPENEVENT", parts[1] is "Mon"
-
                     if len(parts) >= 2:
                         short_day = parts[1].strip()
-                        full_day = DAY_MAPPING.get(short_day, short_day)
+                        full_day = DAY_MAPPING.get(short_day, "Unknown Day")
+                        today_short_day = datetime.now().strftime("%a")
 
-                        print(f"💊 PILLBOX EVENT DETECTED: {full_day}")
+                        if short_day == today_short_day:
+                            conn = get_db_connection()
+                            today_date_str = datetime.now().strftime("%Y-%m-%d")
+                            patients = conn.execute(
+                                "SELECT id, name FROM patients"
+                            ).fetchall()
+                            patient_logged = None
+                            for p in patients:
+                                log = conn.execute(
+                                    "SELECT status FROM medication_logs WHERE patient_id = ? AND date = ?",
+                                    (p["id"], today_date_str),
+                                ).fetchone()
+                                status = log["status"] if log else "PENDING"
+                                if status != "TAKEN":
+                                    log_medication(
+                                        p["name"], "TAKEN", notes="Taken via pillbox."
+                                    )
+                                    patient_logged = p["name"]
+                                    break
+                            conn.close()
 
-                        # Generate Speech
-                        message = f"{full_day} has been opened."
+                            if patient_logged:
+                                print(
+                                    f"💊 Pillbox event for today logged as TAKEN for {patient_logged}"
+                                )
+                                message = "Thank you for taking your medication."
+                            else:
+                                print(
+                                    "💊 Pillbox event for today, but all medications already logged."
+                                )
+                                message = (
+                                    "Pillbox opened, but medication already recorded."
+                                )
 
-                        # Use the dedicated ALERT_FILENAME
-                        if text_to_speech(message, filename=ALERT_FILENAME):
-                            play_audio(ALERT_FILENAME)
+                            if text_to_speech(message, filename=ALERT_FILENAME):
+                                play_audio(ALERT_FILENAME)
+                        else:
+                            print(f"💊 PILLBOX EVENT DETECTED for {full_day}")
+                            message = f"The pillbox for {full_day} has been opened."
+                            if text_to_speech(message, filename=ALERT_FILENAME):
+                                play_audio(ALERT_FILENAME)
 
         except Exception as e:
             print(f"Serial Error: {e}")
