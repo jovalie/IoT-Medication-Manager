@@ -601,7 +601,7 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
             play_audio(OUTPUT_FILENAME)
 
             # Loop to check status periodically during the delay
-            delay_seconds = 15  # 15 seconds for demo (was 300)
+            delay_seconds = 5  # 5 seconds for demo
             check_interval = 1
             elapsed = 0
             medication_taken_during_delay = False
@@ -616,6 +616,9 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
                     (patient_id, today_date_str),
                 ).fetchone()
                 conn.close()
+                
+                current_status = log["status"] if log else "None"
+                print(f"DEBUG: Waiting... Elapsed: {elapsed}s, Status: {current_status}")
 
                 if log and log["status"] == "TAKEN":
                     print(
