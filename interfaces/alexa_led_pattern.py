@@ -50,7 +50,7 @@ class AlexaLedPattern(object):
             # White is Red+Green+Blue
             # brightness is used for all channels
             pixels = [0, brightness, brightness, brightness] * self.pixels_number
-            self.show(pixels)
+        self.show(pixels)
             time.sleep(0.04)  # Slower fade (was 0.01)
 
             if brightness <= 0:

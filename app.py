@@ -2,9 +2,109 @@ from flask import Flask, render_template, jsonify, request, redirect, url_for
 import sqlite3
 from datetime import datetime, timedelta
 import os
+import sys
+import time
+import wave
+import json
+import random
+import argparse
+import pyaudio
+import audioop
+import requests
+import threading
+import serial
+from threading import Lock
+from dotenv import load_dotenv
+import urllib.parse
+from google.cloud import speech
+from google.cloud import texttospeech
+import vertexai
+from vertexai.generative_models import GenerativeModel
+
+load_dotenv()
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "interfaces"))
+
+parser = argparse.ArgumentParser(description="Medication Manager Voice Assistant")
+parser.add_argument(
+    "--no-pi",
+    action="store_true",
+    help="Run in local test mode without Pi-specific hardware (LEDs) or Arduino.",
+)
+args = parser.parse_args()
+
+if args.no_pi:
+    print("--- RUNNING IN AUDIO-ENABLED LOCAL TEST MODE (--no-pi) ---")
+
+    class MockPixels:
+        def listen(self):
+            print("\n[LED: LISTENING]")
+
+        def think(self):
+            print("[LED: THINKING]")
+
+        def speak(self):
+            print("[LED: SPEAKING]")
+
+        def off(self):
+            print("[LED: OFF]")
+
+    pixels = MockPixels()
+else:
+    try:
+        sys.path.append(os.path.join(os.path.dirname(__file__), "interfaces"))
+        from pixels import pixels
+    except ImportError as e:
+        print(f"FATAL: Raspberry Pi hardware library import failed: {e}")
+        sys.exit(1)
+
 
 app = Flask(__name__)
 DB_NAME = "medication_manager.db"
+CREDENTIALS_FILE = "google_credentials.json"
+RESPEAKER_RATE = 16000
+RESPEAKER_CHANNELS = 1
+RESPEAKER_WIDTH = 2
+CHUNK = 1024
+INPUT_FILENAME = "input_request.wav"
+OUTPUT_FILENAME = "output_response.wav"
+ALERT_FILENAME = "alert_response.wav"
+GEMINI_MODEL_NAME = "gemini-2.5-flash"
+SILENCE_THRESHOLD = 500
+SILENCE_DURATION = 2.0
+MAX_RECORD_SECONDS = 10
+SERIAL_PORT = "/dev/ttyACM0"
+BAUD_RATE = 9600
+
+DAY_MAPPING = {
+    "Mon": "Monday",
+    "Tue": "Tuesday",
+    "Wed": "Wednesday",
+    "Thu": "Thursday",
+    "Fri": "Friday",
+    "Sat": "Saturday",
+    "Sun": "Sunday",
+}
+
+audio_lock = Lock()
+
+if args.no_pi:
+    p = pyaudio.PyAudio()
+    info = p.get_host_api_info_by_index(0)
+    numdevices = info.get("deviceCount")
+    RESPEAKER_INDEX = -1
+    for i in range(0, numdevices):
+        if (
+            p.get_device_info_by_host_api_device_index(0, i).get("maxInputChannels")
+        ) > 0:
+            RESPEAKER_INDEX = i
+            break
+    if RESPEAKER_INDEX == -1:
+        print("FATAL: No audio input device found.")
+        sys.exit(1)
+    p.terminate()
+else:
+    RESPEAKER_INDEX = 2
 
 
 # --- Database Setup (Merged from setup_db.py) ---
@@ -94,10 +194,343 @@ def setup_database():
     print("--- Flask DB Setup Complete ---")
 
 
+if not os.path.exists(CREDENTIALS_FILE):
+    print(f"Error: {CREDENTIALS_FILE} not found!")
+    sys.exit(1)
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = CREDENTIALS_FILE
+
+try:
+    with open(CREDENTIALS_FILE, "r") as f:
+        creds_data = json.load(f)
+    vertexai.init(project=creds_data.get("project_id"), location="us-central1")
+    model = GenerativeModel(
+        GEMINI_MODEL_NAME,
+        system_instruction=[
+            "You are a helpful medication manager assistant.",
+            "Return ONLY a JSON object.",
+            "Possible intents: 'MEDICATION_LOG', 'NEW_PATIENT', 'INTRODUCTION', 'DELAY', 'CONFIRMATION', 'UNKNOWN'.",
+            "If user says 'Yes' or 'I took it', return intent: CONFIRMATION value: YES.",
+            "If user says 'No' or 'Not yet', return intent: CONFIRMATION value: NO.",
+            "If user says 'Give me 5 minutes', return intent: DELAY.",
+        ],
+    )
+    print(f"* Vertex AI Initialized: {GEMINI_MODEL_NAME}")
+except Exception as e:
+    print(f"Error initializing Vertex AI: {e}")
+    sys.exit(1)
+
+
 def get_db_connection():
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def log_medication(patient_name, status, notes=None):
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute("SELECT id FROM patients WHERE name LIKE ?", (f"%{patient_name}%",))
+        patient = c.fetchone()
+        if not patient:
+            conn.close()
+            return False, "Patient not found."
+
+        patient_id = patient["id"]
+        date_str = datetime.now().strftime("%Y-%m-%d")
+        time_str = datetime.now().strftime("%H:%M:%S")
+
+        c.execute(
+            """INSERT INTO medication_logs (patient_id, date, time_taken, status, notes)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(patient_id, date) DO UPDATE SET
+            status=excluded.status, time_taken=excluded.time_taken, notes=excluded.notes""",
+            (patient_id, date_str, time_str, status, notes),
+        )
+        conn.commit()
+        conn.close()
+        return True, "Success"
+    except Exception as e:
+        print(f"DB Error: {e}")
+        return False, str(e)
+
+
+def record_audio():
+    if args.no_pi:
+        pixels.listen()
+        text_input = input("🎤 YOU (type response): ")
+        pixels.off()
+        return text_input
+
+    print(f"* Recording...")
+    pixels.listen()
+    p = pyaudio.PyAudio()
+    try:
+        stream = p.open(
+            rate=RESPEAKER_RATE,
+            format=p.get_format_from_width(RESPEAKER_WIDTH),
+            channels=RESPEAKER_CHANNELS,
+            input=True,
+            input_device_index=RESPEAKER_INDEX,
+        )
+        frames = []
+        silent_chunks = 0
+        chunks_per_second = RESPEAKER_RATE / CHUNK
+        max_silent = int(chunks_per_second * SILENCE_DURATION)
+        max_total = int(chunks_per_second * MAX_RECORD_SECONDS)
+        count = 0
+
+        while True:
+            data = stream.read(CHUNK, exception_on_overflow=False)
+            frames.append(data)
+            count += 1
+            rms = audioop.rms(data, 2)
+            if rms < SILENCE_THRESHOLD:
+                silent_chunks += 1
+            else:
+                silent_chunks = 0
+            if silent_chunks > max_silent or count > max_total:
+                break
+
+        stream.stop_stream()
+        stream.close()
+
+        silence = b"\x00" * int(RESPEAKER_RATE * RESPEAKER_WIDTH * 0.5)
+        wf = wave.open(INPUT_FILENAME, "wb")
+        wf.setnchannels(RESPEAKER_CHANNELS)
+        wf.setsampwidth(p.get_sample_size(p.get_format_from_width(RESPEAKER_WIDTH)))
+        wf.setframerate(RESPEAKER_RATE)
+        wf.writeframes(silence + b"".join(frames))
+        wf.close()
+    finally:
+        pixels.off()
+        p.terminate()
+    return INPUT_FILENAME
+
+
+def speech_to_text(audio_or_text):
+    if args.no_pi:
+        return audio_or_text
+    print("* STT Processing...")
+    pixels.think()
+    client = speech.SpeechClient()
+    with open(audio_or_text, "rb") as audio:
+        content = audio.read()
+    audio = speech.RecognitionAudio(content=content)
+    config = speech.RecognitionConfig(
+        encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+        sample_rate_hertz=RESPEAKER_RATE,
+        language_code="en-US",
+        audio_channel_count=RESPEAKER_CHANNELS,
+    )
+    try:
+        response = client.recognize(config=config, audio=audio)
+        pixels.off()
+        for result in response.results:
+            text = result.alternatives[0].transcript
+            print(f"You said: {text}")
+            return text
+    except Exception as e:
+        print(f"STT Error: {e}")
+    pixels.off()
+    return None
+
+
+def text_to_speech(text, filename=OUTPUT_FILENAME):
+    """
+    Synthesizes speech.
+    Accepts a filename so the Pillbox thread can use a different file
+    than the main thread to avoid collisions.
+    """
+    if args.no_pi:
+        print(f"🔊 ASSISTANT: {text}")
+        return True
+
+    print(f"* Synthesizing: '{text}'")
+    pixels.think()
+    client = texttospeech.TextToSpeechClient()
+    synthesis_input = texttospeech.SynthesisInput(text=text)
+    voice = texttospeech.VoiceSelectionParams(
+        language_code="en-US", ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+    )
+    audio_config = texttospeech.AudioConfig(
+        audio_encoding=texttospeech.AudioEncoding.LINEAR16, sample_rate_hertz=16000
+    )
+
+    try:
+        response = client.synthesize_speech(
+            input=synthesis_input, voice=voice, audio_config=audio_config
+        )
+        with open(filename, "wb") as out:
+            out.write(response.audio_content)
+        pixels.off()
+        return True
+    except Exception as e:
+        print(f"TTS Error: {e}")
+        pixels.off()
+        return False
+
+
+def play_audio(audio_file):
+    if args.no_pi:
+        return
+
+    # --- CRITICAL: THREAD LOCK ---
+    # This ensures the Pillbox and the Assistant don't speak over each other
+    with audio_lock:
+        print(f"* Playing {audio_file}...")
+        pixels.speak()
+        wf = wave.open(audio_file, "rb")
+        p = pyaudio.PyAudio()
+        try:
+            stream = p.open(
+                format=p.get_format_from_width(wf.getsampwidth()),
+                channels=wf.getnchannels(),
+                rate=wf.getframerate(),
+                output=True,
+            )
+            data = wf.readframes(CHUNK)
+            while data:
+                stream.write(data)
+                data = wf.readframes(CHUNK)
+            stream.stop_stream()
+            stream.close()
+        finally:
+            pixels.off()
+            p.terminate()
+            wf.close()
+
+
+def process_intent(text):
+    print(f"* Gemini Analysis: '{text}'")
+    pixels.think()
+    try:
+        conn = get_db_connection()
+        patients = conn.execute("SELECT name, time_due FROM patients").fetchall()
+        conn.close()
+        patient_context = ", ".join(
+            [f"{p['name']} ({p['time_due']})" for p in patients]
+        )
+
+        full_prompt = f"Context: {patient_context}. User says: '{text}'"
+        response = model.generate_content(full_prompt)
+        cleaned_text = response.text.strip().replace("```json", "").replace("```", "")
+        return json.loads(cleaned_text)
+    except Exception as e:
+        print(f"Gemini Error: {e}")
+        return {"intent": "UNKNOWN"}
+
+
+def send_whatsapp_alert(patient_name):
+    api_key = os.getenv("CALLMEBOT_API_KEY")
+    phone = os.getenv("CAREGIVER_PHONE_NUMBER")
+    if not all([api_key, phone]):
+        return
+    msg = urllib.parse.quote_plus(f"Alert: {patient_name} missed medication.")
+    url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={msg}&apikey={api_key}"
+    try:
+        requests.get(url)
+        print(f"✅ WhatsApp Alert sent for {patient_name}")
+    except Exception as e:
+        print(f"WhatsApp Error: {e}")
+
+
+def monitor_pillbox():
+    """
+    Background thread that listens to the Arduino via USB Serial.
+    It specifically looks for the 'OPENEVENT:' tag defined in your Arduino code.
+    """
+    if args.no_pi:
+        print("--- No Pi Mode: Skipping Serial Monitor ---")
+        return
+
+    print(f"--- Connecting to Arduino on {SERIAL_PORT} ---")
+
+    try:
+        ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+        ser.flush()
+    except Exception as e:
+        print(f"⚠️ Error connecting to Arduino: {e}")
+        return
+
+    while True:
+        try:
+            if ser.in_waiting > 0:
+                # Read line from Arduino
+                line = ser.readline().decode("utf-8").strip()
+
+                # --- NEW LOGIC FOR YOUR 'OPENEVENT' TAG ---
+                # Arduino sends: "OPENEVENT:Mon"
+                if line.startswith("OPENEVENT:"):
+                    # Split by the colon
+                    parts = line.split(":")
+                    # parts[0] is "OPENEVENT", parts[1] is "Mon"
+
+                    if len(parts) >= 2:
+                        short_day = parts[1].strip()
+                        full_day = DAY_MAPPING.get(short_day, short_day)
+
+                        print(f"💊 PILLBOX EVENT DETECTED: {full_day}")
+
+                        # Generate Speech
+                        message = f"{full_day} has been opened."
+
+                        # Use the dedicated ALERT_FILENAME
+                        if text_to_speech(message, filename=ALERT_FILENAME):
+                            play_audio(ALERT_FILENAME)
+
+        except Exception as e:
+            print(f"Serial Error: {e}")
+            time.sleep(1)
+
+
+def run_reminder_flow(patient_name, medicine, time_due):
+    print(f"\n--- Reminder for {patient_name} ---")
+    reminders_count = 0
+    max_reminders = 3
+
+    text_to_speech(f"Hello {patient_name}. It's {time_due}, time for your {medicine}.")
+    play_audio(OUTPUT_FILENAME)
+
+    while reminders_count < max_reminders:
+        audio_file = record_audio()
+        text = speech_to_text(audio_file)
+
+        if not text:
+            print("* No response. Waiting...")
+            time.sleep(5)
+            reminders_count += 1
+            continue
+
+        intent_data = process_intent(text)
+
+        if (
+            intent_data.get("intent") == "CONFIRMATION"
+            and intent_data.get("value") == "YES"
+        ):
+            log_medication(patient_name, "TAKEN")
+            text_to_speech("Thank you. Recorded.")
+            play_audio(OUTPUT_FILENAME)
+            return
+
+        elif intent_data.get("intent") == "DELAY":
+            text_to_speech("Okay, waiting 5 minutes.")
+            play_audio(OUTPUT_FILENAME)
+            time.sleep(5)
+            text_to_speech("Time is up. Did you take it?")
+            play_audio(OUTPUT_FILENAME)
+            continue  # Restart loop
+
+        else:
+            reminders_count += 1
+            if reminders_count < max_reminders:
+                text_to_speech("Please take your medicine.")
+                play_audio(OUTPUT_FILENAME)
+
+    send_whatsapp_alert(patient_name)
+    text_to_speech("Max reminders reached. Sending alert.")
+    play_audio(OUTPUT_FILENAME)
+    log_medication(patient_name, "MISSED")
 
 
 @app.route("/")
@@ -269,8 +702,48 @@ def reset_status():
     return redirect(url_for("caregiver_dashboard"))
 
 
+def start_voice_assistant():
+    # 1. Start the Pillbox Monitor in a background thread
+    #    daemon=True means this thread dies when the main program exits
+    pillbox_thread = threading.Thread(target=monitor_pillbox, daemon=True)
+    pillbox_thread.start()
+
+    try:
+        conn = get_db_connection()
+        patients = conn.execute(
+            "SELECT name, medicine, time_due FROM patients ORDER BY id"
+        ).fetchall()
+        conn.close()
+
+        # Infinite loop to keep the program alive so the pillbox monitor keeps working
+        # even after reminders are done (or you can remove the while True to run once)
+        while True:
+            for patient in patients:
+                run_reminder_flow(
+                    patient["name"], patient["medicine"], patient["time_due"]
+                )
+                print(f"--- Finished flow for {patient['name']}. Next in 3s... ---")
+                time.sleep(3)
+
+            print(
+                "--- All reminders done. Listening for Pillbox events (Ctrl+C to exit) ---"
+            )
+            time.sleep(60)  # Just wait and let the background thread do its work
+
+    except KeyboardInterrupt:
+        print("\nExiting voice assistant...")
+        pixels.off()
+    except Exception as e:
+        print(f"Error in voice assistant: {e}")
+        pixels.off()
+
+
 if __name__ == "__main__":
     # Initialize DB if not exists
     setup_database()
 
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    # Run the voice assistant in a background thread
+    assistant_thread = threading.Thread(target=start_voice_assistant, daemon=True)
+    assistant_thread.start()
+
+    app.run(host="0.0.0.0", port=8080, debug=True, use_reloader=False)

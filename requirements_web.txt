@@ -1,0 +1,5 @@
+google-cloud-aiplatform
+flask
+python-dotenv
+requests
+
