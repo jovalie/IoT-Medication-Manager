@@ -427,7 +427,6 @@ def play_audio(audio_file):
                 channels=wf.getnchannels(),
                 rate=wf.getframerate(),
                 output=True,
-                output_device_index=RESPEAKER_INDEX,
             )
             data = wf.readframes(CHUNK)
             while data:
