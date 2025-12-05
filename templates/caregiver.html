@@ -25,8 +25,8 @@
                     <hr>
                     <p class="card-text">Today's Status:</p>
                     <div class="d-flex justify-content-center align-items-center">
-                        <span class="status-dot status-{{ patient.status }}" style="width: 30px; height: 30px;"></span>
-                        <span class="h4 mb-0 ms-2">{{ patient.status }}</span>
+                        <span id="status-dot-{{ patient.id }}" class="status-dot status-{{ patient.status }}" style="width: 30px; height: 30px;"></span>
+                        <span id="status-text-{{ patient.id }}" class="h4 mb-0 ms-2">{{ patient.status }}</span>
                     </div>
                 </div>
             </div>
@@ -34,5 +34,34 @@
     </div>
     {% endfor %}
 </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+<script type="text/javascript">
+    var socket = io();
+    socket.on('connect', function() {
+        console.log('Connected to Socket.IO server');
+    });
+
+    socket.on('status_update', function(data) {
+        console.log('Status update received:', data);
+        var patientId = data.patient_id;
+        var newStatus = data.status;
+
+        // Update Status Text
+        var statusText = document.getElementById('status-text-' + patientId);
+        if (statusText) {
+            statusText.innerText = newStatus;
+        }
+
+        // Update Status Dot Class
+        var statusDot = document.getElementById('status-dot-' + patientId);
+        if (statusDot) {
+            // Remove old status classes
+            statusDot.classList.remove('status-PENDING', 'status-TAKEN', 'status-MISSED');
+            // Add new status class
+            statusDot.classList.add('status-' + newStatus);
+        }
+    });
+</script>
 {% endblock %}
 

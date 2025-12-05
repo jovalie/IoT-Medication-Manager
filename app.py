@@ -1,4 +1,5 @@
 from flask import Flask, render_template, jsonify, request, redirect, url_for
+from flask_socketio import SocketIO, emit
 import sqlite3
 from datetime import datetime, timedelta
 import os
@@ -62,6 +63,7 @@ else:
 
 
 app = Flask(__name__)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 DB_NAME = "medication_manager.db"
 CREDENTIALS_FILE = "google_credentials.json"
 RESPEAKER_RATE = 16000
@@ -262,6 +264,17 @@ def log_medication(patient_name, status, notes=None):
         )
         conn.commit()
         conn.close()
+
+        # Emit real-time update
+        socketio.emit(
+            "status_update",
+            {
+                "patient_id": patient_id,
+                "patient_name": patient_name,
+                "status": status,
+                "time_taken": time_str,
+            },
+        )
         return True, "Success"
     except Exception as e:
         print(f"DB Error: {e}")
@@ -841,14 +854,10 @@ if __name__ == "__main__":
     assistant_thread.start()
 
     # Open the browser to the caregiver dashboard
-    if not args.no_pi:
-        # On the Pi, we might want to force a specific browser or display, 
-        # but standard open() usually works if a desktop environment is running.
-        # Adding a slight delay to ensure Flask is up.
-        def open_browser():
-            time.sleep(2)
-            webbrowser.open("http://localhost:8080/caregiver")
+    def open_browser():
+        time.sleep(2)
+        webbrowser.open("http://localhost:8080/caregiver")
 
-        threading.Thread(target=open_browser, daemon=True).start()
+    threading.Thread(target=open_browser, daemon=True).start()
 
-    app.run(host="0.0.0.0", port=8080, debug=True, use_reloader=False)
+    socketio.run(app, host="0.0.0.0", port=8080, debug=True, use_reloader=False, allow_unsafe_werkzeug=True)
