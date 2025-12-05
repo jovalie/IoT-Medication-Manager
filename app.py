@@ -349,7 +349,8 @@ def text_to_speech(text, filename=OUTPUT_FILENAME):
     print(f"* Synthesizing: '{text}'")
     pixels.think()
     client = texttospeech.TextToSpeechClient()
-    synthesis_input = texttospeech.SynthesisInput(text=text)
+    ssml_text = f'<speak><break time="250ms"/>{text}</speak>'
+    synthesis_input = texttospeech.SynthesisInput(ssml=ssml_text)
     voice = texttospeech.VoiceSelectionParams(
         language_code="en-US", ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
     )
@@ -512,15 +513,41 @@ def monitor_pillbox():
             time.sleep(1)
 
 
-def run_reminder_flow(patient_name, medicine, time_due):
+def run_reminder_flow(patient_id, patient_name, medicine, time_due):
     print(f"\n--- Reminder for {patient_name} ---")
     reminders_count = 0
     max_reminders = 3
+
+    # --- NEW: Check status before starting flow ---
+    conn = get_db_connection()
+    today_date_str = datetime.now().strftime("%Y-%m-%d")
+    log = conn.execute(
+        "SELECT status FROM medication_logs WHERE patient_id = ? AND date = ?",
+        (patient_id, today_date_str),
+    ).fetchone()
+    conn.close()
+
+    if log and log["status"] == "TAKEN":
+        print(f"Medication already taken for {patient_name}. Skipping flow.")
+        return
 
     text_to_speech(f"Hello {patient_name}. It's {time_due}, time for your {medicine}.")
     play_audio(OUTPUT_FILENAME)
 
     while reminders_count < max_reminders:
+        # --- NEW: Check status at the start of each loop ---
+        conn = get_db_connection()
+        log = conn.execute(
+            "SELECT status FROM medication_logs WHERE patient_id = ? AND date = ?",
+            (patient_id, today_date_str),
+        ).fetchone()
+        conn.close()
+        if log and log["status"] == "TAKEN":
+            print(
+                f"Medication for {patient_name} was logged as TAKEN. Stopping reminder."
+            )
+            return
+
         audio_file = record_audio()
         text = speech_to_text(audio_file)
 
@@ -739,7 +766,7 @@ def start_voice_assistant():
     try:
         conn = get_db_connection()
         patients = conn.execute(
-            "SELECT name, medicine, time_due FROM patients ORDER BY id"
+            "SELECT id, name, medicine, time_due FROM patients ORDER BY id"
         ).fetchall()
         conn.close()
 
@@ -748,7 +775,10 @@ def start_voice_assistant():
         while True:
             for patient in patients:
                 run_reminder_flow(
-                    patient["name"], patient["medicine"], patient["time_due"]
+                    patient["id"],
+                    patient["name"],
+                    patient["medicine"],
+                    patient["time_due"],
                 )
                 print(f"--- Finished flow for {patient['name']}. Next in 3s... ---")
                 time.sleep(3)
