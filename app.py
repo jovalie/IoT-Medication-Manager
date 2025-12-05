@@ -63,7 +63,7 @@ else:
 
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 DB_NAME = "medication_manager.db"
 CREDENTIALS_FILE = "google_credentials.json"
 RESPEAKER_RATE = 16000
@@ -856,8 +856,34 @@ if __name__ == "__main__":
     # Open the browser to the caregiver dashboard
     def open_browser():
         time.sleep(2)
-        webbrowser.open("http://localhost:8080/caregiver")
+        url = "http://localhost:8080/caregiver"
+        
+        # specific for Raspberry Pi (chromium-browser)
+        try:
+            # Try to find chromium-browser or chromium
+            # Use 'chromium-browser --kiosk' if you want kiosk mode, but for now just open
+            # Note: webbrowser.get() usually expects the executable name or a registered name
+            # On Pi, it's usually 'chromium-browser'
+            
+            # Check if we are on the Pi (linux) to attempt specific browser logic
+            if sys.platform.startswith('linux'):
+                # Try creating a controller for chromium-browser
+                # The %s is a placeholder for the URL
+                chromium = webbrowser.get('chromium-browser') 
+                chromium.open(url)
+            else:
+                raise Exception("Not on Linux")
+        except Exception:
+            # Fallback to default browser if chromium not found or not on Linux
+            webbrowser.open(url)
 
     threading.Thread(target=open_browser, daemon=True).start()
 
-    socketio.run(app, host="0.0.0.0", port=8080, debug=True, use_reloader=False, allow_unsafe_werkzeug=True)
+    socketio.run(
+        app,
+        host="0.0.0.0",
+        port=8080,
+        debug=True,
+        use_reloader=False,
+        allow_unsafe_werkzeug=True,
+    )
