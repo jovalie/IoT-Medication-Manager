@@ -66,7 +66,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 DB_NAME = "medication_manager.db"
 CREDENTIALS_FILE = "google_credentials.json"
 RESPEAKER_RATE = 16000
-RESPEAKER_CHANNELS = 1
+RESPEAKER_CHANNELS = 2
 RESPEAKER_WIDTH = 2
 CHUNK = 1024
 INPUT_FILENAME = "input_request.wav"
@@ -427,6 +427,7 @@ def play_audio(audio_file):
                 channels=wf.getnchannels(),
                 rate=wf.getframerate(),
                 output=True,
+                output_device_index=RESPEAKER_INDEX,
             )
             data = wf.readframes(CHUNK)
             while data:
@@ -464,12 +465,12 @@ def trigger_caregiver_alert(patient_name, reason):
     """Triggers a visual alert on the Flask dashboard."""
     alert_msg = f"ALERT: {patient_name} - {reason}"
     print(f"🚨 {alert_msg}")
-    
+
     # Add to global list
     timestamp = datetime.now().strftime("%H:%M:%S")
     alert_data = {"message": alert_msg, "timestamp": timestamp}
     global_alerts.append(alert_data)
-    
+
     # Emit socket event for immediate popup
     socketio.emit("new_alert", alert_data)
 
@@ -607,7 +608,9 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
 
         elif intent_data.get("intent") == "DELAY":
             if delays_count >= max_delays:
-                text_to_speech("You have delayed too many times. I am notifying your caregiver.")
+                text_to_speech(
+                    "You have delayed too many times. I am notifying your caregiver."
+                )
                 play_audio(OUTPUT_FILENAME)
                 trigger_caregiver_alert(patient_name, "Exceeded max delays")
                 log_medication(patient_name, "MISSED")
@@ -828,28 +831,31 @@ def start_voice_assistant():
             "SELECT id, name, medicine, time_due FROM patients"
         ).fetchall()
         conn.close()
-        
+
         # Sort patients for demo order: Student Hamad, Athlete Joan, Grandpa Albert
         def sort_key(p):
-            if "Hamad" in p["name"]: return 1
-            if "Joan" in p["name"]: return 2
-            if "Albert" in p["name"]: return 3
+            if "Hamad" in p["name"]:
+                return 1
+            if "Joan" in p["name"]:
+                return 2
+            if "Albert" in p["name"]:
+                return 3
             return 99
-            
+
         patients.sort(key=sort_key)
 
         # Infinite loop to keep the program alive so the pillbox monitor keeps working
         # even after reminders are done (or you can remove the while True to run once)
         print("\n--- Press ENTER to start the demo flow ---")
         input()
-        
+
         while True:
             for patient in patients:
                 # Demo Mode: Reset status to PENDING for each patient before starting
                 # This allows the pillbox interaction to be demoed for every patient in sequence
                 conn = get_db_connection()
                 today_date_str = datetime.now().strftime("%Y-%m-%d")
-                
+
                 # Insert PENDING if not exists, or update to PENDING if exists
                 conn.execute(
                     """INSERT INTO medication_logs (patient_id, date, status) 
@@ -860,7 +866,7 @@ def start_voice_assistant():
                 )
                 conn.commit()
                 conn.close()
-                
+
                 # Emit socket update to refresh UI to PENDING
                 socketio.emit(
                     "status_update",
