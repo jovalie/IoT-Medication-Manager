@@ -597,11 +597,11 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
             return
 
         elif intent_data.get("intent") == "DELAY":
-            text_to_speech("Okay, waiting 5 minutes.")
+            text_to_speech("Okay, waiting 5 seconds.")
             play_audio(OUTPUT_FILENAME)
 
             # Loop to check status periodically during the delay
-            delay_seconds = 300  # 5 minutes
+            delay_seconds = 5  # 5 seconds for demo (was 300)
             check_interval = 1
             elapsed = 0
             medication_taken_during_delay = False
