@@ -90,6 +90,7 @@ DAY_MAPPING = {
 }
 
 CURRENT_PATIENT_ID = None
+MEDICATION_TAKEN_EVENT = threading.Event()
 audio_lock = Lock()
 pyaudio_instance = None  # Global instance for PyAudio
 
@@ -518,6 +519,7 @@ def monitor_pillbox():
                                     print(
                                         f"💊 Pillbox event logged as TAKEN for {patient['name']}"
                                     )
+                                    MEDICATION_TAKEN_EVENT.set() # Signal main thread
                                     message = "Thank you for taking your medication."
                                 else:
                                     message = "Pillbox opened, but could not find the current patient."
@@ -603,47 +605,13 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
             text_to_speech("Okay, waiting 5 minutes.")
             play_audio(OUTPUT_FILENAME)
 
-            # Loop to check status periodically during the delay
-            delay_seconds = 5  # 5 seconds for demo
-            check_interval = 1
-            elapsed = 0
-            medication_taken_during_delay = False
-
-            while elapsed < delay_seconds:
-                time.sleep(check_interval)
-                elapsed += check_interval
-
-                conn = get_db_connection()
-                log = conn.execute(
-                    "SELECT status FROM medication_logs WHERE patient_id = ? AND date = ?",
-                    (patient_id, today_date_str),
-                ).fetchone()
-                conn.close()
-
-                current_status = log["status"] if log else "None"
-                print(
-                    f"DEBUG: Waiting... Elapsed: {elapsed}s, Status: {current_status}"
-                )
-
-                if log and log["status"] == "TAKEN":
-                    print(
-                        f"Medication taken during delay for {patient_name}. Stopping wait."
-                    )
-                    medication_taken_during_delay = True
-                    break
+            # Wait for 5 seconds (demo) OR until medication is taken
+            # We clear the event first to ensure we catch a *new* event
+            MEDICATION_TAKEN_EVENT.clear()
             
-            # Final check in case it happened right at the end
-            if not medication_taken_during_delay:
-                conn = get_db_connection()
-                log = conn.execute(
-                    "SELECT status FROM medication_logs WHERE patient_id = ? AND date = ?",
-                    (patient_id, today_date_str),
-                ).fetchone()
-                conn.close()
-                if log and log["status"] == "TAKEN":
-                     medication_taken_during_delay = True
-
-            if medication_taken_during_delay:
+            print("DEBUG: Waiting for medication taken event or 5s timeout...")
+            if MEDICATION_TAKEN_EVENT.wait(timeout=5):
+                print(f"Medication taken during delay for {patient_name}. Stopping wait.")
                 return
 
             text_to_speech("Time is up. Did you take it?")
