@@ -840,6 +840,9 @@ def start_voice_assistant():
 
         # Infinite loop to keep the program alive so the pillbox monitor keeps working
         # even after reminders are done (or you can remove the while True to run once)
+        print("\n--- Press ENTER to start the demo flow ---")
+        input()
+        
         while True:
             for patient in patients:
                 # Demo Mode: Reset status to PENDING for each patient before starting
