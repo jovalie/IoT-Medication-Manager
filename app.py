@@ -550,6 +550,8 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
     print(f"\n--- Reminder for {patient_name} ---")
     reminders_count = 0
     max_reminders = 3
+    delays_count = 0
+    max_delays = 3
 
     # --- NEW: Check status before starting flow ---
     conn = get_db_connection()
@@ -602,6 +604,14 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
             return
 
         elif intent_data.get("intent") == "DELAY":
+            if delays_count >= max_delays:
+                text_to_speech("You have delayed too many times. I am notifying your caregiver.")
+                play_audio(OUTPUT_FILENAME)
+                send_whatsapp_alert(patient_name)
+                log_medication(patient_name, "MISSED")
+                return
+
+            delays_count += 1
             text_to_speech("Okay, waiting 5 minutes.")
             play_audio(OUTPUT_FILENAME)
 
