@@ -519,7 +519,7 @@ def monitor_pillbox():
                                     print(
                                         f"💊 Pillbox event logged as TAKEN for {patient['name']}"
                                     )
-                                    MEDICATION_TAKEN_EVENT.set() # Signal main thread
+                                    MEDICATION_TAKEN_EVENT.set()  # Signal main thread
                                     message = "Thank you for taking your medication."
                                 else:
                                     message = "Pillbox opened, but could not find the current patient."
@@ -608,10 +608,12 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
             # Wait for 5 seconds (demo) OR until medication is taken
             # We clear the event first to ensure we catch a *new* event
             MEDICATION_TAKEN_EVENT.clear()
-            
+
             print("DEBUG: Waiting for medication taken event or 5s timeout...")
             if MEDICATION_TAKEN_EVENT.wait(timeout=5):
-                print(f"Medication taken during delay for {patient_name}. Stopping wait.")
+                print(
+                    f"Medication taken during delay for {patient_name}. Stopping wait."
+                )
                 return
 
             text_to_speech("Time is up. Did you take it?")
@@ -819,6 +821,33 @@ def start_voice_assistant():
         # even after reminders are done (or you can remove the while True to run once)
         while True:
             for patient in patients:
+                # Demo Mode: Reset status to PENDING for each patient before starting
+                # This allows the pillbox interaction to be demoed for every patient in sequence
+                conn = get_db_connection()
+                today_date_str = datetime.now().strftime("%Y-%m-%d")
+                
+                # Insert PENDING if not exists, or update to PENDING if exists
+                conn.execute(
+                    """INSERT INTO medication_logs (patient_id, date, status) 
+                       VALUES (?, ?, 'PENDING')
+                       ON CONFLICT(patient_id, date) DO UPDATE SET 
+                       status='PENDING', time_taken=NULL, notes=NULL""",
+                    (patient["id"], today_date_str),
+                )
+                conn.commit()
+                conn.close()
+                
+                # Emit socket update to refresh UI to PENDING
+                socketio.emit(
+                    "status_update",
+                    {
+                        "patient_id": patient["id"],
+                        "patient_name": patient["name"],
+                        "status": "PENDING",
+                        "time_taken": None,
+                    },
+                )
+
                 CURRENT_PATIENT_ID = patient["id"]
                 run_reminder_flow(
                     patient["id"],
