@@ -86,6 +86,7 @@ DAY_MAPPING = {
     "Sun": "Sunday",
 }
 
+CURRENT_PATIENT_ID = None
 audio_lock = Lock()
 
 if args.no_pi:
@@ -467,38 +468,31 @@ def monitor_pillbox():
                         today_short_day = datetime.now().strftime("%a")
 
                         if short_day == today_short_day:
-                            conn = get_db_connection()
-                            today_date_str = datetime.now().strftime("%Y-%m-%d")
-                            patients = conn.execute(
-                                "SELECT id, name FROM patients"
-                            ).fetchall()
-                            patient_logged = None
-                            for p in patients:
-                                log = conn.execute(
-                                    "SELECT status FROM medication_logs WHERE patient_id = ? AND date = ?",
-                                    (p["id"], today_date_str),
+                            if CURRENT_PATIENT_ID is not None:
+                                conn = get_db_connection()
+                                patient = conn.execute(
+                                    "SELECT name FROM patients WHERE id = ?",
+                                    (CURRENT_PATIENT_ID,),
                                 ).fetchone()
-                                status = log["status"] if log else "PENDING"
-                                if status != "TAKEN":
-                                    log_medication(
-                                        p["name"], "TAKEN", notes="Taken via pillbox."
-                                    )
-                                    patient_logged = p["name"]
-                                    break
-                            conn.close()
 
-                            if patient_logged:
-                                print(
-                                    f"💊 Pillbox event for today logged as TAKEN for {patient_logged}"
-                                )
-                                message = "Thank you for taking your medication."
+                                if patient:
+                                    log_medication(
+                                        patient["name"],
+                                        "TAKEN",
+                                        notes="Taken via pillbox.",
+                                    )
+                                    print(
+                                        f"💊 Pillbox event logged as TAKEN for {patient['name']}"
+                                    )
+                                    message = "Thank you for taking your medication."
+                                else:
+                                    message = "Pillbox opened, but could not find the current patient."
+                                conn.close()
                             else:
                                 print(
-                                    "💊 Pillbox event for today, but all medications already logged."
+                                    "💊 Pillbox opened, but no active patient reminder."
                                 )
-                                message = (
-                                    "Pillbox opened, but medication already recorded."
-                                )
+                                message = "Pillbox opened."
 
                             if text_to_speech(message, filename=ALERT_FILENAME):
                                 play_audio(ALERT_FILENAME)
@@ -758,6 +752,7 @@ def reset_status():
 
 
 def start_voice_assistant():
+    global CURRENT_PATIENT_ID
     # 1. Start the Pillbox Monitor in a background thread
     #    daemon=True means this thread dies when the main program exits
     pillbox_thread = threading.Thread(target=monitor_pillbox, daemon=True)
@@ -774,12 +769,14 @@ def start_voice_assistant():
         # even after reminders are done (or you can remove the while True to run once)
         while True:
             for patient in patients:
+                CURRENT_PATIENT_ID = patient["id"]
                 run_reminder_flow(
                     patient["id"],
                     patient["name"],
                     patient["medicine"],
                     patient["time_due"],
                 )
+                CURRENT_PATIENT_ID = None
                 print(f"--- Finished flow for {patient['name']}. Next in 3s... ---")
                 time.sleep(3)
 
