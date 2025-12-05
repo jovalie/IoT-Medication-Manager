@@ -532,7 +532,8 @@ def monitor_pillbox():
                                 play_audio(ALERT_FILENAME)
                         else:
                             print(f"💊 PILLBOX EVENT DETECTED for {full_day}")
-                            message = f"The pillbox for {full_day} has been opened. Today is {today_short_day}."
+                            today_full_day = DAY_MAPPING.get(today_short_day, today_short_day)
+                            message = f"The pillbox for {full_day} has been opened. Today is {today_full_day}."
                             if text_to_speech(message, filename=ALERT_FILENAME):
                                 play_audio(ALERT_FILENAME)
 
@@ -616,9 +617,11 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
                     (patient_id, today_date_str),
                 ).fetchone()
                 conn.close()
-                
+
                 current_status = log["status"] if log else "None"
-                print(f"DEBUG: Waiting... Elapsed: {elapsed}s, Status: {current_status}")
+                print(
+                    f"DEBUG: Waiting... Elapsed: {elapsed}s, Status: {current_status}"
+                )
 
                 if log and log["status"] == "TAKEN":
                     print(
