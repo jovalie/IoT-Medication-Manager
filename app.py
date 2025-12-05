@@ -291,45 +291,56 @@ def record_audio():
     print(f"* Recording...")
     pixels.listen()
     p = pyaudio_instance  # Use the global instance
-    try:
-        stream = p.open(
-            rate=RESPEAKER_RATE,
-            format=p.get_format_from_width(RESPEAKER_WIDTH),
-            channels=RESPEAKER_CHANNELS,
-            input=True,
-            input_device_index=RESPEAKER_INDEX,
-        )
-        frames = []
-        silent_chunks = 0
-        chunks_per_second = RESPEAKER_RATE / CHUNK
-        max_silent = int(chunks_per_second * SILENCE_DURATION)
-        max_total = int(chunks_per_second * MAX_RECORD_SECONDS)
-        count = 0
+    
+    # Use lock to prevent conflict with play_audio
+    with audio_lock:
+        try:
+            stream = p.open(
+                rate=RESPEAKER_RATE,
+                format=p.get_format_from_width(RESPEAKER_WIDTH),
+                channels=RESPEAKER_CHANNELS,
+                input=True,
+                input_device_index=RESPEAKER_INDEX,
+            )
+            frames = []
+            silent_chunks = 0
+            chunks_per_second = RESPEAKER_RATE / CHUNK
+            max_silent = int(chunks_per_second * SILENCE_DURATION)
+            max_total = int(chunks_per_second * MAX_RECORD_SECONDS)
+            count = 0
 
-        while True:
-            data = stream.read(CHUNK, exception_on_overflow=False)
-            frames.append(data)
-            count += 1
-            rms = audioop.rms(data, 2)
-            if rms < SILENCE_THRESHOLD:
-                silent_chunks += 1
-            else:
-                silent_chunks = 0
-            if silent_chunks > max_silent or count > max_total:
-                break
+            while True:
+                data = stream.read(CHUNK, exception_on_overflow=False)
+                frames.append(data)
+                count += 1
+                rms = audioop.rms(data, 2)
+                if rms < SILENCE_THRESHOLD:
+                    silent_chunks += 1
+                else:
+                    silent_chunks = 0
+                if silent_chunks > max_silent or count > max_total:
+                    break
 
-        stream.stop_stream()
-        stream.close()
+            stream.stop_stream()
+            stream.close()
+            time.sleep(0.1) # Allow hardware to reset
+        except Exception as e:
+            print(f"Error recording: {e}")
+            pixels.off()
+            return INPUT_FILENAME
+        
+        try:
+            silence = b"\x00" * int(RESPEAKER_RATE * RESPEAKER_WIDTH * 0.5)
+            wf = wave.open(INPUT_FILENAME, "wb")
+            wf.setnchannels(RESPEAKER_CHANNELS)
+            wf.setsampwidth(p.get_sample_size(p.get_format_from_width(RESPEAKER_WIDTH)))
+            wf.setframerate(RESPEAKER_RATE)
+            wf.writeframes(silence + b"".join(frames))
+            wf.close()
+        except Exception as e:
+            print(f"Error saving wav: {e}")
 
-        silence = b"\x00" * int(RESPEAKER_RATE * RESPEAKER_WIDTH * 0.5)
-        wf = wave.open(INPUT_FILENAME, "wb")
-        wf.setnchannels(RESPEAKER_CHANNELS)
-        wf.setsampwidth(p.get_sample_size(p.get_format_from_width(RESPEAKER_WIDTH)))
-        wf.setframerate(RESPEAKER_RATE)
-        wf.writeframes(silence + b"".join(frames))
-        wf.close()
-    finally:
-        pixels.off()
+    pixels.off()
     return INPUT_FILENAME
 
 
@@ -421,6 +432,7 @@ def play_audio(audio_file):
                 data = wf.readframes(CHUNK)
             stream.stop_stream()
             stream.close()
+            time.sleep(0.1)  # Allow hardware to reset
         finally:
             pixels.off()
             wf.close()
@@ -857,19 +869,19 @@ if __name__ == "__main__":
     def open_browser():
         time.sleep(2)
         url = "http://localhost:8080/caregiver"
-        
+
         # specific for Raspberry Pi (chromium-browser)
         try:
             # Try to find chromium-browser or chromium
             # Use 'chromium-browser --kiosk' if you want kiosk mode, but for now just open
             # Note: webbrowser.get() usually expects the executable name or a registered name
             # On Pi, it's usually 'chromium-browser'
-            
+
             # Check if we are on the Pi (linux) to attempt specific browser logic
-            if sys.platform.startswith('linux'):
+            if sys.platform.startswith("linux"):
                 # Try creating a controller for chromium-browser
                 # The %s is a placeholder for the URL
-                chromium = webbrowser.get('chromium-browser') 
+                chromium = webbrowser.get("chromium-browser")
                 chromium.open(url)
             else:
                 raise Exception("Not on Linux")
