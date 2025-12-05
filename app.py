@@ -18,7 +18,6 @@ from threading import Lock
 from dotenv import load_dotenv
 import urllib.parse
 import atexit
-import webbrowser
 from google.cloud import speech
 from google.cloud import texttospeech
 import vertexai
@@ -291,7 +290,7 @@ def record_audio():
     print(f"* Recording...")
     pixels.listen()
     p = pyaudio_instance  # Use the global instance
-    
+
     # Use lock to prevent conflict with play_audio
     with audio_lock:
         try:
@@ -323,12 +322,12 @@ def record_audio():
 
             stream.stop_stream()
             stream.close()
-            time.sleep(0.1) # Allow hardware to reset
+            time.sleep(0.1)  # Allow hardware to reset
         except Exception as e:
             print(f"Error recording: {e}")
             pixels.off()
             return INPUT_FILENAME
-        
+
         try:
             silence = b"\x00" * int(RESPEAKER_RATE * RESPEAKER_WIDTH * 0.5)
             wf = wave.open(INPUT_FILENAME, "wb")
@@ -864,32 +863,6 @@ if __name__ == "__main__":
     # Run the voice assistant in a background thread
     assistant_thread = threading.Thread(target=start_voice_assistant, daemon=True)
     assistant_thread.start()
-
-    # Open the browser to the caregiver dashboard
-    def open_browser():
-        time.sleep(2)
-        url = "http://localhost:8080/caregiver"
-
-        # specific for Raspberry Pi (chromium-browser)
-        try:
-            # Try to find chromium-browser or chromium
-            # Use 'chromium-browser --kiosk' if you want kiosk mode, but for now just open
-            # Note: webbrowser.get() usually expects the executable name or a registered name
-            # On Pi, it's usually 'chromium-browser'
-
-            # Check if we are on the Pi (linux) to attempt specific browser logic
-            if sys.platform.startswith("linux"):
-                # Try creating a controller for chromium-browser
-                # The %s is a placeholder for the URL
-                chromium = webbrowser.get("chromium-browser")
-                chromium.open(url)
-            else:
-                raise Exception("Not on Linux")
-        except Exception:
-            # Fallback to default browser if chromium not found or not on Linux
-            webbrowser.open(url)
-
-    threading.Thread(target=open_browser, daemon=True).start()
 
     socketio.run(
         app,
