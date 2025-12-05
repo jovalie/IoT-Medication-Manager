@@ -532,7 +532,9 @@ def monitor_pillbox():
                                 play_audio(ALERT_FILENAME)
                         else:
                             print(f"💊 PILLBOX EVENT DETECTED for {full_day}")
-                            today_full_day = DAY_MAPPING.get(today_short_day, today_short_day)
+                            today_full_day = DAY_MAPPING.get(
+                                today_short_day, today_short_day
+                            )
                             message = f"The pillbox for {full_day} has been opened. Today is {today_full_day}."
                             if text_to_speech(message, filename=ALERT_FILENAME):
                                 play_audio(ALERT_FILENAME)
@@ -629,6 +631,17 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
                     )
                     medication_taken_during_delay = True
                     break
+            
+            # Final check in case it happened right at the end
+            if not medication_taken_during_delay:
+                conn = get_db_connection()
+                log = conn.execute(
+                    "SELECT status FROM medication_logs WHERE patient_id = ? AND date = ?",
+                    (patient_id, today_date_str),
+                ).fetchone()
+                conn.close()
+                if log and log["status"] == "TAKEN":
+                     medication_taken_during_delay = True
 
             if medication_taken_during_delay:
                 return
