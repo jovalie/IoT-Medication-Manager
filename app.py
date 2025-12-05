@@ -93,6 +93,7 @@ CURRENT_PATIENT_ID = None
 MEDICATION_TAKEN_EVENT = threading.Event()
 audio_lock = Lock()
 pyaudio_instance = None  # Global instance for PyAudio
+global_alerts = []  # List to store active alerts for the frontend
 
 if args.no_pi:
     p = pyaudio.PyAudio()
@@ -160,10 +161,11 @@ def setup_database():
         return
 
     # Seed data
+    # Order: Student Hamad, Athlete Joan, Grandpa Albert
     patients = [
-        ("Grandpa Albert", "Lisinopril", "08:00"),  # Senior Care Persona
         ("Student Hamad", "Vitamin B", "10:00"),  # Student Persona
         ("Athlete Joan", "Iron Supplement", "12:00"),  # Athlete Persona
+        ("Grandpa Albert", "Lisinopril", "08:00"),  # Senior Care Persona
     ]
     c.executemany(
         "INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients
@@ -458,18 +460,18 @@ def process_intent(text):
         return {"intent": "UNKNOWN"}
 
 
-def send_whatsapp_alert(patient_name):
-    api_key = os.getenv("CALLMEBOT_API_KEY")
-    phone = os.getenv("CAREGIVER_PHONE_NUMBER")
-    if not all([api_key, phone]):
-        return
-    msg = urllib.parse.quote_plus(f"Alert: {patient_name} missed medication.")
-    url = f"https://api.callmebot.com/whatsapp.php?phone={phone}&text={msg}&apikey={api_key}"
-    try:
-        requests.get(url)
-        print(f"✅ WhatsApp Alert sent for {patient_name}")
-    except Exception as e:
-        print(f"WhatsApp Error: {e}")
+def trigger_caregiver_alert(patient_name, reason):
+    """Triggers a visual alert on the Flask dashboard."""
+    alert_msg = f"ALERT: {patient_name} - {reason}"
+    print(f"🚨 {alert_msg}")
+    
+    # Add to global list
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    alert_data = {"message": alert_msg, "timestamp": timestamp}
+    global_alerts.append(alert_data)
+    
+    # Emit socket event for immediate popup
+    socketio.emit("new_alert", alert_data)
 
 
 def monitor_pillbox():
@@ -607,7 +609,7 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
             if delays_count >= max_delays:
                 text_to_speech("You have delayed too many times. I am notifying your caregiver.")
                 play_audio(OUTPUT_FILENAME)
-                send_whatsapp_alert(patient_name)
+                trigger_caregiver_alert(patient_name, "Exceeded max delays")
                 log_medication(patient_name, "MISSED")
                 return
 
@@ -638,7 +640,7 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
                 )
                 play_audio(OUTPUT_FILENAME)
 
-    send_whatsapp_alert(patient_name)
+    trigger_caregiver_alert(patient_name, "Missed medication after reminders")
     text_to_speech("Max reminders reached. Sending alert.")
     play_audio(OUTPUT_FILENAME)
     log_medication(patient_name, "MISSED")
@@ -823,9 +825,18 @@ def start_voice_assistant():
     try:
         conn = get_db_connection()
         patients = conn.execute(
-            "SELECT id, name, medicine, time_due FROM patients ORDER BY id"
+            "SELECT id, name, medicine, time_due FROM patients"
         ).fetchall()
         conn.close()
+        
+        # Sort patients for demo order: Student Hamad, Athlete Joan, Grandpa Albert
+        def sort_key(p):
+            if "Hamad" in p["name"]: return 1
+            if "Joan" in p["name"]: return 2
+            if "Albert" in p["name"]: return 3
+            return 99
+            
+        patients.sort(key=sort_key)
 
         # Infinite loop to keep the program alive so the pillbox monitor keeps working
         # even after reminders are done (or you can remove the while True to run once)

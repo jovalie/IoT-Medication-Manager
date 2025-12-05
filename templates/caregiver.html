@@ -35,11 +35,50 @@
     {% endfor %}
 </div>
 
+<!-- Alert Modal -->
+<div class="modal fade" id="alertModal" tabindex="-1" aria-labelledby="alertModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-danger text-white">
+      <div class="modal-header">
+        <h5 class="modal-title" id="alertModalLabel">⚠️ CAREGIVER ALERT</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="alertModalBody">
+        <!-- Alert message will be injected here -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Acknowledge</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 <script type="text/javascript">
     var socket = io();
+    var alertModal;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize Bootstrap modal
+        var modalEl = document.getElementById('alertModal');
+        if (modalEl) {
+            alertModal = new bootstrap.Modal(modalEl);
+        }
+    });
+
     socket.on('connect', function() {
         console.log('Connected to Socket.IO server');
+    });
+
+    socket.on('new_alert', function(data) {
+        console.log('New Alert:', data);
+        var alertBody = document.getElementById('alertModalBody');
+        if (alertBody) {
+            alertBody.innerHTML = `<p class="h4">${data.message}</p><p class="small">${data.timestamp}</p>`;
+        }
+        if (alertModal) {
+            alertModal.show();
+        }
     });
 
     socket.on('status_update', function(data) {

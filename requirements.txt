@@ -7,7 +7,7 @@ google-cloud-texttospeech==2.14.2
 google-cloud-vision==3.4.5
 google-cloud-aiplatform
 flask
-flask-socketio
+flask_socketio
 python-dotenv
 twilio
 pyserial==3.5
