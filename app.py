@@ -507,7 +507,7 @@ def monitor_pillbox():
                                 play_audio(ALERT_FILENAME)
                         else:
                             print(f"💊 PILLBOX EVENT DETECTED for {full_day}")
-                            message = f"The pillbox for {full_day} has been opened."
+                            message = f"The pillbox for {full_day} has been opened. Today is {today_short_day}."
                             if text_to_speech(message, filename=ALERT_FILENAME):
                                 play_audio(ALERT_FILENAME)
 
@@ -574,7 +574,34 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
         elif intent_data.get("intent") == "DELAY":
             text_to_speech("Okay, waiting 5 minutes.")
             play_audio(OUTPUT_FILENAME)
-            time.sleep(5)
+
+            # Loop to check status periodically during the delay
+            delay_seconds = 300  # 5 minutes
+            check_interval = 1
+            elapsed = 0
+            medication_taken_during_delay = False
+
+            while elapsed < delay_seconds:
+                time.sleep(check_interval)
+                elapsed += check_interval
+
+                conn = get_db_connection()
+                log = conn.execute(
+                    "SELECT status FROM medication_logs WHERE patient_id = ? AND date = ?",
+                    (patient_id, today_date_str),
+                ).fetchone()
+                conn.close()
+
+                if log and log["status"] == "TAKEN":
+                    print(
+                        f"Medication taken during delay for {patient_name}. Stopping wait."
+                    )
+                    medication_taken_during_delay = True
+                    break
+
+            if medication_taken_during_delay:
+                return
+
             text_to_speech("Time is up. Did you take it?")
             play_audio(OUTPUT_FILENAME)
             continue  # Restart loop
@@ -582,7 +609,9 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
         else:
             reminders_count += 1
             if reminders_count < max_reminders:
-                text_to_speech("Please take your medicine.")
+                text_to_speech(
+                    "Let's time to take your medicine. Please take your medicine."
+                )
                 play_audio(OUTPUT_FILENAME)
 
     send_whatsapp_alert(patient_name)
