@@ -16,6 +16,7 @@ import serial
 from threading import Lock
 from dotenv import load_dotenv
 import urllib.parse
+import atexit
 from google.cloud import speech
 from google.cloud import texttospeech
 import vertexai
@@ -88,6 +89,7 @@ DAY_MAPPING = {
 
 CURRENT_PATIENT_ID = None
 audio_lock = Lock()
+pyaudio_instance = None  # Global instance for PyAudio
 
 if args.no_pi:
     p = pyaudio.PyAudio()
@@ -106,6 +108,15 @@ if args.no_pi:
     p.terminate()
 else:
     RESPEAKER_INDEX = 2
+    pyaudio_instance = pyaudio.PyAudio()
+
+    def terminate_audio():
+        """Ensures PyAudio is terminated properly on exit."""
+        if pyaudio_instance:
+            pyaudio_instance.terminate()
+            print("PyAudio terminated.")
+
+    atexit.register(terminate_audio)
 
 
 # --- Database Setup (Merged from setup_db.py) ---
@@ -265,7 +276,7 @@ def record_audio():
 
     print(f"* Recording...")
     pixels.listen()
-    p = pyaudio.PyAudio()
+    p = pyaudio_instance  # Use the global instance
     try:
         stream = p.open(
             rate=RESPEAKER_RATE,
@@ -305,7 +316,6 @@ def record_audio():
         wf.close()
     finally:
         pixels.off()
-        p.terminate()
     return INPUT_FILENAME
 
 
@@ -383,7 +393,7 @@ def play_audio(audio_file):
         print(f"* Playing {audio_file}...")
         pixels.speak()
         wf = wave.open(audio_file, "rb")
-        p = pyaudio.PyAudio()
+        p = pyaudio_instance  # Use the global instance
         try:
             stream = p.open(
                 format=p.get_format_from_width(wf.getsampwidth()),
@@ -399,7 +409,6 @@ def play_audio(audio_file):
             stream.close()
         finally:
             pixels.off()
-            p.terminate()
             wf.close()
 
 
