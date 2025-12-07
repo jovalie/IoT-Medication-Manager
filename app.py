@@ -591,6 +591,8 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
 
         if not text:
             print("* No response. Waiting...")
+            text_to_speech("I didn't hear you. Did you take your medication?")
+            play_audio(OUTPUT_FILENAME)
             time.sleep(5)
             reminders_count += 1
             continue
