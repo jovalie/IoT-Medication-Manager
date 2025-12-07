@@ -589,6 +589,18 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
         audio_file = record_audio()
         text = speech_to_text(audio_file)
 
+        # --- Check if pillbox event happened during recording ---
+        conn = get_db_connection()
+        log = conn.execute(
+            "SELECT status FROM medication_logs WHERE patient_id = ? AND date = ?",
+            (patient_id, today_date_str),
+        ).fetchone()
+        conn.close()
+        if log and log["status"] == "TAKEN":
+            print(f"Medication for {patient_name} was logged as TAKEN during recording. Stopping reminder.")
+            return
+        # -------------------------------------------------------
+
         if not text:
             print("* No response. Waiting...")
             text_to_speech("I didn't hear you. Did you take your medication?")
