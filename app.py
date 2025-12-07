@@ -161,10 +161,11 @@ def setup_database():
         return
 
     # Seed data
-    # Order: Student Hamad, Athlete Joan, Grandpa Albert
+    # Order: Student Hamad, Athlete Joan, Uncle Sam, Grandpa Albert
     patients = [
         ("Student Hamad", "Vitamin B", "10:00"),  # Student Persona
         ("Athlete Joan", "Iron Supplement", "12:00"),  # Athlete Persona
+        ("Uncle Sam", "Omeprazole", "09:00"),  # Uncle Persona
         ("Grandpa Albert", "Lisinopril", "08:00"),  # Senior Care Persona
     ]
     c.executemany(
@@ -831,14 +832,16 @@ def start_voice_assistant():
         ).fetchall()
         conn.close()
 
-        # Sort patients for demo order: Student Hamad, Athlete Joan, Grandpa Albert
+        # Sort patients for demo order: Student Hamad, Athlete Joan, Uncle Sam, Grandpa Albert
         def sort_key(p):
             if "Hamad" in p["name"]:
                 return 1
             if "Joan" in p["name"]:
                 return 2
-            if "Albert" in p["name"]:
+            if "Sam" in p["name"]:
                 return 3
+            if "Albert" in p["name"]:
+                return 4
             return 99
 
         patients.sort(key=sort_key)
@@ -884,9 +887,11 @@ def start_voice_assistant():
                     patient["medicine"],
                     patient["time_due"],
                 )
+                print(
+                    f"--- Finished flow for {patient['name']}. Press ENTER for next patient... ---"
+                )
+                input()
                 CURRENT_PATIENT_ID = None
-                print(f"--- Finished flow for {patient['name']}. Next in 3s... ---")
-                time.sleep(3)
 
             print(
                 "--- All reminders done. Listening for Pillbox events (Ctrl+C to exit) ---"
