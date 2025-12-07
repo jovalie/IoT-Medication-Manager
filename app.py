@@ -175,29 +175,29 @@ def setup_database():
     c.execute("SELECT id, name FROM patients")
     patient_list = c.fetchall()
 
-    year = 2025
-    month = 11
-    num_days = 30
+    start_date = datetime(2025, 11, 1).date()
+    end_date = datetime(2025, 12, 7).date()
+    delta = end_date - start_date
 
     for pid, name in patient_list:
-        for day in range(1, num_days + 1):
-            log_date = f"{year}-{month:02d}-{day:02d}"
-            log_date_obj = datetime.strptime(log_date, "%Y-%m-%d").date()
-            today_date = datetime.now().date()
+        for i in range(delta.days + 1):
+            log_date_obj = start_date + timedelta(days=i)
+            log_date = log_date_obj.strftime("%Y-%m-%d")
 
-            if log_date_obj > today_date:
-                continue
-
-            if (pid + day) % 5 == 0:
+            # Logic for random-ish status
+            day_num = log_date_obj.day
+            if (pid + day_num) % 5 == 0:
                 status = "MISSED"
-            elif (pid + day) % 13 == 0:
+            elif (pid + day_num) % 13 == 0:
                 status = "PENDING"
             else:
                 status = "TAKEN"
 
-            if log_date_obj < today_date and status == "PENDING":
+            # Past pending should be missed
+            if log_date_obj < end_date and status == "PENDING":
                 status = "MISSED"
-            if log_date_obj == today_date:
+            # Today (Dec 7) should be PENDING for the demo
+            if log_date_obj == end_date:
                 status = "PENDING"
 
             time_taken = "09:00:00" if status == "TAKEN" else None
