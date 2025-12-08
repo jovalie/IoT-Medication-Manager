@@ -9,7 +9,7 @@ The IoT Medication Manager combines:
 2.  **Smart Pillbox**: Detects physical compartment openings via an Arduino interface to automatically log medication intake.
 3.  **Caregiver Dashboard**: A real-time web interface for caregivers to monitor patient status and receive alerts.
 
-## 🏗️ Architecture
+## Architecture
 
 The system follows a hybrid architecture combining local embedded control with cloud-based AI.
 
@@ -80,7 +80,7 @@ graph TD
     *   Cloud Text-to-Speech API
     *   Vertex AI API
 
-## 🚀 Installation & Reimplementation
+## Installation & Reimplementation
 
 Follow these steps to set up the system from scratch.
 
@@ -118,7 +118,20 @@ pip install -r requirements.txt
     *   Ensure the Arduino is running the `pill_box.ino` sketch.
     *   Verify the serial port is `/dev/ttyACM0` (or update `SERIAL_PORT` in `app.py`).
 
-## ▶️ Usage
+### 6. Arduino Pillbox Logic (`arduino/pill_box.ino`)
+
+The smart pillbox uses an Arduino to monitor 7 compartments (Monday-Sunday) using magnetic reed switches.
+
+*   **Pin Configuration:**
+    *   Pins 2-8: Reed Switches (Input Pullup) for Mon-Sun.
+    *   Pin 13: Status LED (Lights up when a box is open).
+*   **Logic:**
+    *   The loop checks the state of all 7 switches continuously.
+    *   When a compartment is opened (Magnet moves away -> Switch HIGH), it sends a serial message: `OPENEVENT:<Day>` (e.g., `OPENEVENT:Mon`).
+    *   This message is intercepted by the Python application (`monitor_pillbox` thread) to log the medication intake.
+    *   It also tracks the duration the box remains open to validate "real" usage vs accidental triggers (though the primary trigger for the app is the initial open event).
+
+## Usage
 
 ### Run the Application
 To start the full system (Voice Assistant + Web Server + Pillbox Monitor):
@@ -140,7 +153,7 @@ python3 app.py --no-pi
 *   Simulates LED behavior in the console.
 *   Skips Arduino serial connection.
 
-## 🧪 Demo Scenarios
+## Demo Scenarios
 
 The system is pre-configured with 4 personas to demonstrate different capabilities:
 
@@ -156,3 +169,7 @@ The system is pre-configured with 4 personas to demonstrate different capabiliti
 *   `interfaces/`: Hardware interface modules (LEDs, etc.).
 *   `templates/`: HTML templates for the web dashboard.
 *   `SYSTEM_DESIGN.md`: Detailed system architecture documentation.
+
+## 📸 Gallery
+
+![System Interface](IMG_6887.jpeg)
