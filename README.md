@@ -1,6 +1,6 @@
 # IoT Medication Manager
 
-A smart, voice-activated medication management system designed to help patients adhere to their medication schedules. This project integrates a **Raspberry Pi** with a **ReSpeaker 2-Mics Pi HAT**, an **Arduino-controlled smart pillbox**, and **Google Cloud AI services** to provide a seamless assistive experience.
+A smart, voice-activated medication management system designed to help patients adhere to their medication schedules. This project integrates a **Raspberry Pi** with a **ReSpeaker 4-Mics Pi HAT**, an **Arduino-controlled smart pillbox**, and **Google Cloud AI services** to provide a seamless assistive experience.
 
 ## System Overview
 
