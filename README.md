@@ -2,7 +2,7 @@
 
 A smart, voice-activated medication management system designed to help patients adhere to their medication schedules. This project integrates a **Raspberry Pi** with a **ReSpeaker 2-Mics Pi HAT**, an **Arduino-controlled smart pillbox**, and **Google Cloud AI services** to provide a seamless assistive experience.
 
-## 📖 System Overview
+## System Overview
 
 The IoT Medication Manager combines:
 1.  **Voice Assistant**: Reminds patients to take medication and understands natural language responses using **Google Gemini 2.5 Flash**.
@@ -34,7 +34,7 @@ graph TD
     subgraph "Cloud Services (Google Cloud)"
         STT[Speech-to-Text API]
         TTS[Text-to-Speech API]
-        Gemini[Vertex AI (Gemini 2.5)]
+        Gemini["Vertex AI (Gemini 2.5)"]
     end
 
     subgraph "Frontend"
@@ -64,7 +64,7 @@ graph TD
     SocketIO -- Real-time Data --> Dashboard
 ```
 
-## 🛠️ Hardware Requirements
+## Hardware Requirements
 
 *   **Raspberry Pi 4** (or 3B+)
 *   **ReSpeaker 2-Mics Pi HAT** (for Audio Input & LED feedback)
@@ -72,7 +72,7 @@ graph TD
 *   **Speaker** (3.5mm jack connected to ReSpeaker HAT)
 *   **Magnetic Reed Switches** (for detecting pillbox compartment status)
 
-## 💻 Software Requirements
+## Software Requirements
 
 *   **Python 3.11+**
 *   **Google Cloud Platform Account** with enabled APIs:
@@ -162,7 +162,7 @@ The system is pre-configured with 4 personas to demonstrate different capabiliti
 3.  **Uncle Sam**: Misses medication completely (Demonstrates silence detection, retries, and alerts).
 4.  **Grandpa Albert**: Delays repeatedly until max retries are reached, triggering a caregiver alert.
 
-## 📂 Project Structure
+## Project Structure
 
 *   `app.py`: Main application entry point (Flask + Voice Logic).
 *   `pill_box.ino`: Arduino sketch for the smart pillbox.
@@ -170,6 +170,6 @@ The system is pre-configured with 4 personas to demonstrate different capabiliti
 *   `templates/`: HTML templates for the web dashboard.
 *   `SYSTEM_DESIGN.md`: Detailed system architecture documentation.
 
-## 📸 Gallery
+## Gallery
 
 ![System Interface](IMG_6887.jpeg)
