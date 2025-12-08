@@ -17,7 +17,7 @@ The system follows a hybrid architecture combining local embedded control with c
 graph TD
     subgraph "Hardware Layer"
         Arduino[Arduino Pillbox] -- Serial (USB) --> RPi[Raspberry Pi 4]
-        ReSpeaker[ReSpeaker 2-Mics HAT] -- GPIO/SPI --> RPi
+        ReSpeaker[ReSpeaker 4-Mics HAT] -- GPIO/SPI --> RPi
         Mic[Microphone Array] -- Audio Input --> ReSpeaker
         Speaker[Speaker] -- Audio Output --> ReSpeaker
         LEDs[APA102 LEDs] -- SPI --> ReSpeaker
