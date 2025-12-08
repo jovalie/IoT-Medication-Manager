@@ -1,77 +1,158 @@
-# IoT Medication Manager (with ReSpeaker 4-Mic HAT)
+# IoT Medication Manager
 
-A voice-controlled medication management assistant for Raspberry Pi using the ReSpeaker 4-Mic HAT. It features custom LED animations for visual feedback and uses Google Cloud services for Speech-to-Text (STT), Text-to-Speech (TTS), and Gemini 2.5 Flash for intelligent responses.
+A smart, voice-activated medication management system designed to help patients adhere to their medication schedules. This project integrates a **Raspberry Pi** with a **ReSpeaker 2-Mics Pi HAT**, an **Arduino-controlled smart pillbox**, and **Google Cloud AI services** to provide a seamless assistive experience.
 
-## Features
+## 📖 System Overview
 
--   **Voice Interface**: Hands-free interaction using microphone array and speaker.
--   **Smart Assistant**: Powered by **Google Gemini 2.5 Flash** with a "Medication Manager" persona.
--   **Visual Feedback**:
-    -   **Breathing White**: Listening (Waiting for user input)
-    -   **Rotating White**: Thinking (Processing/AI generation)
-    -   **Breathing Green**: Speaking (Playing response)
--   **Silence Detection**: Automatically stops recording when you stop speaking.
--   **Cloud Integration**: Uses Google Vertex AI, Cloud Speech-to-Text, and Cloud Text-to-Speech.
+The IoT Medication Manager combines:
+1.  **Voice Assistant**: Reminds patients to take medication and understands natural language responses using **Google Gemini 2.5 Flash**.
+2.  **Smart Pillbox**: Detects physical compartment openings via an Arduino interface to automatically log medication intake.
+3.  **Caregiver Dashboard**: A real-time web interface for caregivers to monitor patient status and receive alerts.
 
-## Hardware Requirements
+## 🏗️ Architecture
 
--   Raspberry Pi (Zero 2 W, 3B+, 4, or 5)
--   [ReSpeaker 4-Mic Array for Raspberry Pi](https://wiki.seeedstudio.com/ReSpeaker_4_Mic_Array_for_Raspberry_Pi/)
--   Speaker (connected via 3.5mm jack on the HAT or Pi)
+The system follows a hybrid architecture combining local embedded control with cloud-based AI.
 
-## Software Requirements
+```mermaid
+graph TD
+    subgraph "Hardware Layer"
+        Arduino[Arduino Pillbox] -- Serial (USB) --> RPi[Raspberry Pi 4]
+        ReSpeaker[ReSpeaker 2-Mics HAT] -- GPIO/SPI --> RPi
+        Mic[Microphone Array] -- Audio Input --> ReSpeaker
+        Speaker[Speaker] -- Audio Output --> ReSpeaker
+        LEDs[APA102 LEDs] -- SPI --> ReSpeaker
+    end
 
--   Python 3.11+
--   Google Cloud Platform Account with enabled APIs:
-    -   Cloud Speech-to-Text API
-    -   Cloud Text-to-Speech API
-    -   Vertex AI API
+    subgraph "Application Layer (Flask App)"
+        VoiceThread[Voice Assistant Thread]
+        PillboxThread[Pillbox Monitor Thread]
+        WebApp[Flask Web Server]
+        SocketIO[Socket.IO Server]
+        DB[(SQLite Database)]
+    end
 
-## Installation
+    subgraph "Cloud Services (Google Cloud)"
+        STT[Speech-to-Text API]
+        TTS[Text-to-Speech API]
+        Gemini[Vertex AI (Gemini 2.5)]
+    end
 
-1.  **Clone the Repository**:
-    ```bash
-    git clone https://github.com/jovalie/IoT-Medication-Manager.git
-    cd IoT-Medication-Manager
-    ```
+    subgraph "Frontend"
+        Dashboard[Caregiver Dashboard]
+        Calendar[Patient Calendar]
+    end
 
-2.  **System Dependencies**:
-    ```bash
-    sudo apt-get update
-    sudo apt-get install portaudio19-dev python3-pyaudio
-    ```
-
-3.  **Python Dependencies**:
-    It is recommended to use a virtual environment.
-    ```bash
-    python3 -m venv venv
-    source venv/bin/activate
-    pip install -r requirements.txt
-    ```
-
-4.  **Google Cloud Credentials**:
-    -   Create a Service Account in Google Cloud Console.
-    -   Grant it the **Vertex AI User** role.
-    -   Download the JSON key file.
-    -   Rename it to `google_credentials.json` and place it in the project root.
-
-## Usage
-
-Run the main application:
-
-```bash
-python google_echo.py
+    %% Connections
+    RPi --> VoiceThread
+    RPi --> PillboxThread
+    
+    VoiceThread -- Audio Stream --> ReSpeaker
+    ReSpeaker -- Audio Data --> VoiceThread
+    VoiceThread -- LED Control --> LEDs
+    
+    VoiceThread -- Audio --> STT
+    STT -- Text --> Gemini
+    Gemini -- Intent --> VoiceThread
+    VoiceThread -- Text --> TTS
+    TTS -- Audio --> Speaker
+    
+    PillboxThread -- Events --> DB
+    VoiceThread -- Logs --> DB
+    
+    WebApp -- Reads/Writes --> DB
+    WebApp -- Updates --> SocketIO
+    SocketIO -- Real-time Data --> Dashboard
 ```
 
-### Other Scripts
--   `record_with_leds.py`: Simple test script to record audio with LED feedback and play it back.
--   `test_gemini.py`: Diagnostic script to verify Google Cloud credentials and Gemini model availability.
+## 🛠️ Hardware Requirements
 
-## Technical Details
+*   **Raspberry Pi 4** (or 3B+)
+*   **ReSpeaker 2-Mics Pi HAT** (for Audio Input & LED feedback)
+*   **Arduino Uno/Nano** (for Pillbox sensor control)
+*   **Speaker** (3.5mm jack connected to ReSpeaker HAT)
+*   **Magnetic Reed Switches** (for detecting pillbox compartment status)
 
--   **Audio Recording**: Uses `pyaudio` to capture 16kHz, 16-bit linear PCM audio from the ReSpeaker array (Channel 0-1).
--   **LED Control**: Uses `spidev` and `gpiozero` to control the APA102 LEDs on the HAT via SPI.
--   **AI Backend**:
-    -   **STT**: `google-cloud-speech`
-    -   **TTS**: `google-cloud-texttospeech`
-    -   **LLM**: `gemini-2.5-flash` via `google-cloud-aiplatform` (Vertex AI).
+## 💻 Software Requirements
+
+*   **Python 3.11+**
+*   **Google Cloud Platform Account** with enabled APIs:
+    *   Cloud Speech-to-Text API
+    *   Cloud Text-to-Speech API
+    *   Vertex AI API
+
+## 🚀 Installation & Reimplementation
+
+Follow these steps to set up the system from scratch.
+
+### 1. Clone the Repository
+```bash
+git clone https://github.com/jovalie/IoT-Medication-Manager.git
+cd IoT-Medication-Manager
+```
+
+### 2. System Dependencies (Raspberry Pi)
+Install the necessary system libraries for audio and GPIO control.
+```bash
+sudo apt-get update
+sudo apt-get install portaudio19-dev python3-pyaudio libatlas-base-dev
+```
+
+### 3. Python Environment
+Create and activate a virtual environment.
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 4. Google Cloud Setup
+1.  Create a **Service Account** in the Google Cloud Console.
+2.  Grant the service account the **Vertex AI User** role.
+3.  Download the JSON key file.
+4.  Rename it to `google_credentials.json` and place it in the project root directory.
+
+### 5. Hardware Setup
+1.  Mount the **ReSpeaker 2-Mics Pi HAT** onto the Raspberry Pi GPIO pins.
+2.  Connect the **Speaker** to the HAT's 3.5mm audio jack.
+3.  Connect the **Arduino** to the Raspberry Pi via USB.
+    *   Ensure the Arduino is running the `pill_box.ino` sketch.
+    *   Verify the serial port is `/dev/ttyACM0` (or update `SERIAL_PORT` in `app.py`).
+
+## ▶️ Usage
+
+### Run the Application
+To start the full system (Voice Assistant + Web Server + Pillbox Monitor):
+
+```bash
+python3 app.py
+```
+
+*   **Web Dashboard:** Access at `http://<RPi_IP_Address>:8080/caregiver`
+*   **Voice Assistant:** Follow the console prompts. Press **ENTER** to start the demo flow for each patient.
+
+### Run in "No-Pi" Mode (Local Testing)
+If you don't have the specific hardware (ReSpeaker/Arduino) and want to test the logic/web interface on a laptop:
+
+```bash
+python3 app.py --no-pi
+```
+*   Uses your computer's default microphone/speaker.
+*   Simulates LED behavior in the console.
+*   Skips Arduino serial connection.
+
+## 🧪 Demo Scenarios
+
+The system is pre-configured with 4 personas to demonstrate different capabilities:
+
+1.  **Student Hamad**: Takes medication immediately via the pillbox (No voice interaction needed).
+2.  **Athlete Joan**: Asks for a delay ("5 more minutes"), then takes medication via the pillbox.
+3.  **Uncle Sam**: Misses medication completely (Demonstrates silence detection, retries, and alerts).
+4.  **Grandpa Albert**: Delays repeatedly until max retries are reached, triggering a caregiver alert.
+
+## 📂 Project Structure
+
+*   `app.py`: Main application entry point (Flask + Voice Logic).
+*   `pill_box.ino`: Arduino sketch for the smart pillbox.
+*   `interfaces/`: Hardware interface modules (LEDs, etc.).
+*   `templates/`: HTML templates for the web dashboard.
+*   `SYSTEM_DESIGN.md`: Detailed system architecture documentation.
