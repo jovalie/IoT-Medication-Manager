@@ -67,7 +67,7 @@ graph TD
 ## Hardware Requirements
 
 *   **Raspberry Pi 4** (or 3B+)
-*   **ReSpeaker 2-Mics Pi HAT** (for Audio Input & LED feedback)
+*   **ReSpeaker 4-Mics Pi HAT** (for Audio Input & LED feedback)
 *   **Arduino Uno/Nano** (for Pillbox sensor control)
 *   **Speaker** (3.5mm jack connected to ReSpeaker HAT)
 *   **Magnetic Reed Switches** (for detecting pillbox compartment status)
@@ -112,7 +112,7 @@ pip install -r requirements.txt
 4.  Rename it to `google_credentials.json` and place it in the project root directory.
 
 ### 5. Hardware Setup
-1.  Mount the **ReSpeaker 2-Mics Pi HAT** onto the Raspberry Pi GPIO pins.
+1.  Mount the **ReSpeaker 4-Mics Pi HAT** onto the Raspberry Pi GPIO pins.
 2.  Connect the **Speaker** to the HAT's 3.5mm audio jack.
 3.  Connect the **Arduino** to the Raspberry Pi via USB.
     *   Ensure the Arduino is running the `pill_box.ino` sketch.
