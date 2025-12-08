@@ -156,21 +156,19 @@ def setup_database():
 
     # Check if we already have patients
     c.execute("SELECT count(*) FROM patients")
-    if c.fetchone()[0] > 0:
-        conn.close()
-        return
-
-    # Seed data
-    # Order: Student Hamad, Athlete Joan, Uncle Sam, Grandpa Albert
-    patients = [
-        ("Student Hamad", "Vitamin B", "10:00"),  # Student Persona
-        ("Athlete Joan", "Iron Supplement", "12:00"),  # Athlete Persona
-        ("Uncle Sam", "Omeprazole", "09:00"),  # Uncle Persona
-        ("Grandpa Albert", "Lisinopril", "08:00"),  # Senior Care Persona
-    ]
-    c.executemany(
-        "INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients
-    )
+    if c.fetchone()[0] == 0:
+        # Seed data
+        # Order: Student Hamad, Athlete Joan, Uncle Sam, Grandpa Albert
+        patients = [
+            ("Student Hamad", "Vitamin B", "10:00"),  # Student Persona
+            ("Athlete Joan", "Iron Supplement", "12:00"),  # Athlete Persona
+            ("Uncle Sam", "Omeprazole", "09:00"),  # Uncle Persona
+            ("Grandpa Albert", "Lisinopril", "08:00"),  # Senior Care Persona
+        ]
+        c.executemany(
+            "INSERT INTO patients (name, medicine, time_due) VALUES (?, ?, ?)", patients
+        )
+        print("Seeded patients.")
 
     c.execute("SELECT id, name FROM patients")
     patient_list = c.fetchall()
@@ -597,7 +595,9 @@ def run_reminder_flow(patient_id, patient_name, medicine, time_due):
         ).fetchone()
         conn.close()
         if log and log["status"] == "TAKEN":
-            print(f"Medication for {patient_name} was logged as TAKEN during recording. Stopping reminder.")
+            print(
+                f"Medication for {patient_name} was logged as TAKEN during recording. Stopping reminder."
+            )
             return
         # -------------------------------------------------------
 
