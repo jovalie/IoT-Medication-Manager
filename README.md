@@ -23,7 +23,7 @@ graph TD
         LEDs[APA102 LEDs] -- SPI --> ReSpeaker
     end
 
-    subgraph "Application Layer (Flask App)"
+    subgraph "Application Layer (Flask)"
         VoiceThread[Voice Assistant Thread]
         PillboxThread[Pillbox Monitor Thread]
         WebApp[Flask Web Server]
