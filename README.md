@@ -31,7 +31,7 @@ graph TD
         DB[(SQLite Database)]
     end
 
-    subgraph "Cloud Services (Google Cloud)"
+    subgraph "Google Cloud Services"
         STT[Speech-to-Text API]
         TTS[Text-to-Speech API]
         Gemini["Vertex AI (Gemini 2.5)"]
